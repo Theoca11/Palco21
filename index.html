@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Palco 21 — Gestão V12</title>
+<title>Palco 21 — Gestão V16</title>
 <style>
 :root{--bg:#f4f4f5;--card:#fff;--ink:#151515;--muted:#737373;--line:#e4e4e7;--dark:#101010;--ok:#166534;--warn:#8a5a00;--bad:#991b1b;--blue:#1d4ed8}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
@@ -64,8 +64,8 @@ form{display:grid;grid-template-columns:1fr 1fr;gap:12px}input,select,textarea{w
 <div class="toast" id="toast"></div>
 
 <script>
-const storeKey="palco21_v12";
-const leadSessionKey="palco21_lead_session_v12";
+const storeKey="palco21_v16";
+const leadSessionKey="palco21_lead_session_v16";
 const seed={
 config:{duracaoAula:50,limiteRemarcacaoHoras:24,pagamentoProfessorPorAluno:20,emailAtivo:true,smsAtivo:true},
 utilizadores:[
@@ -74,7 +74,7 @@ utilizadores:[
 {id:3,role:"student",alunoId:1,username:"joao.pereira",email:"joao@example.com"}
 ],
 alunos:[
-{id:1,nome:"João Pereira",instrumento:"Guitarra",instrumentos:["Guitarra"],professor:"Pedro",sala:"Sala 1",email:"joao@example.com",telefone:"912000001",mensalidade:45,pago:true,info:"Levar cabo Jack para a aula.",alerta:"Audição em dezembro."},
+{id:1,nome:"João Pereira",instrumento:"Guitarra",instrumentos:["Guitarra","Baixo"],professor:"Pedro",sala:"Sala 1",email:"joao@example.com",telefone:"912000001",mensalidade:45,pago:true,info:"Levar cabo Jack para a aula.",alerta:"Audição em dezembro."},
 {id:2,nome:"Marta Alves",instrumento:"Piano",instrumentos:["Piano"],professor:"Ana",sala:"Sala 2",email:"marta@example.com",telefone:"912000002",mensalidade:45,pago:false,info:"Enviar repertório pop.",alerta:"Pagamento de setembro em falta."},
 {id:3,nome:"Inês Costa",instrumento:"Canto",instrumentos:["Canto"],professor:"Miguel",sala:"Sala 3",email:"ines@example.com",telefone:"912000003",mensalidade:50,pago:true,info:"Técnica vocal antes do repertório.",alerta:""}
 ],

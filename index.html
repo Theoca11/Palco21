@@ -1,3 +1,413 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Palco 21 — Gestão V12</title>
+<style>
+:root{--bg:#f4f4f5;--card:#fff;--ink:#151515;--muted:#737373;--line:#e4e4e7;--dark:#101010;--ok:#166534;--warn:#8a5a00;--bad:#991b1b;--blue:#1d4ed8}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+.app{display:flex;min-height:100vh}.side{position:fixed;left:0;top:0;bottom:0;width:255px;background:var(--dark);color:white;padding:20px 14px;overflow:auto}.logo{font-size:23px;font-weight:900;padding:8px 10px 20px}.role{background:#212121;border:1px solid #333;border-radius:12px;padding:12px;margin-bottom:14px}.role small{display:block;color:#aaa;font-size:10px}.role select{width:100%;margin-top:7px;padding:9px;border-radius:8px}
+.navlabel{color:#6f6f6f;text-transform:uppercase;font-size:10px;letter-spacing:.08em;margin:16px 10px 5px}nav button{display:block;width:100%;text-align:left;border:0;background:transparent;color:#ccc;padding:10px 12px;border-radius:8px;margin:2px 0;cursor:pointer}nav button:hover,nav button.active{background:#2b2b2b;color:#fff}
+main{margin-left:255px;width:calc(100% - 255px);padding:28px;max-width:1550px}.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#777;font-weight:800}h1{margin:2px 0 6px;font-size:30px}.sub{color:var(--muted);margin-bottom:22px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:18px}.metric{font-size:29px;font-weight:900;margin-top:6px}.label{font-size:12px;color:var(--muted)}.section{margin-top:18px}.row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{border:0;background:#111;color:#fff;border-radius:9px;padding:10px 14px;cursor:pointer}.btn.light{background:#eee;color:#111}.btn.ok{background:#e8f6eb;color:var(--ok)}.btn.warn{background:#fff1d4;color:var(--warn)}.btn.bad{background:#fde8e8;color:var(--bad)}.btn.blue{background:#e8eefb;color:var(--blue)}
+table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto}th,td{padding:11px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:13px;white-space:nowrap}th{color:#666;background:#fafafa}.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;background:#eee}.good{background:#e8f6eb;color:var(--ok)}.warning{background:#fff1d4;color:var(--warn)}.bluebg{background:#e8eefb;color:var(--blue)}.redbg{background:#fde8e8;color:var(--bad)}
+.slot{border-bottom:1px solid var(--line);padding:11px 0}.slot:last-child{border-bottom:0}.notice{background:#f7f7f7;border-left:4px solid #111;border-radius:8px;padding:11px 13px}.queue{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+form{display:grid;grid-template-columns:1fr 1fr;gap:12px}input,select,textarea{width:100%;border:1px solid #d8d8da;border-radius:8px;padding:10px;font:inherit;background:white}.full{grid-column:1/-1}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:18px;z-index:20}.modal.open{display:flex}.modalbox{background:#fff;border-radius:18px;padding:22px;width:min(760px,100%);max-height:92vh;overflow:auto}
+.toast{position:fixed;right:20px;bottom:20px;background:#111;color:#fff;padding:12px 16px;border-radius:10px;display:none;z-index:30}.toast.show{display:block}
+.tabs{display:flex;gap:7px;flex-wrap:wrap}.tabs button{border:1px solid #ddd;background:#fff;padding:8px 11px;border-radius:8px;cursor:pointer}.tabs button.active{background:#111;color:#fff}
+.public{max-width:720px;margin:0 auto}.public .hero{background:#111;color:#fff;border-radius:18px;padding:22px;margin-bottom:16px}.public .hero p{color:#cfcfcf}
+@media(max-width:900px){.side{width:75px}.logo{font-size:0}.logo:after{content:"P21";font-size:18px}.role,.navlabel{display:none}nav button{font-size:0;text-align:center}nav button:after{content:"•";font-size:22px}main{margin-left:75px;width:calc(100% - 75px);padding:18px}.grid,.grid3{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.grid,.grid3,form{grid-template-columns:1fr}.full{grid-column:auto}}
+
+/* V9 public site */
+.site-public{margin:-28px;min-height:calc(100vh - 56px);background:#fff;color:#111}
+.site-public .wrap{max-width:1220px;margin:auto;padding:0 28px}
+.pubtop{height:78px;display:flex;align-items:center;justify-content:space-between}.pubbrand{font-size:21px;font-weight:950;letter-spacing:-.06em}.pubbrand span{color:#ff2417}
+.pubmenu{display:flex;gap:28px;font-size:10px;font-weight:900;letter-spacing:.12em}.pubmenu a{color:#111;text-decoration:none}
+.pubred{background:#ff2417;color:#fff;border:0;padding:13px 18px;font-weight:900;font-size:10px;letter-spacing:.08em;cursor:pointer}
+.pubhero{background:#050505;color:#fff;padding:78px 0 65px}.pubhero-grid{display:grid;grid-template-columns:1fr 1fr;gap:75px;align-items:center}
+.pubkicker{color:#ff2417;font-size:10px;font-weight:900;letter-spacing:.14em}.pubhero h1{font-size:clamp(58px,7vw,102px);line-height:.86;letter-spacing:-.065em;margin:13px 0 23px}.pubhero h1 span{color:#ff2417}.publine{width:74%;height:5px;background:#ff2417;margin:0 0 24px}.pubhero p{max-width:500px;color:#bbb;font-size:14px;line-height:1.55}.pubghost{border:1px solid #aaa;background:transparent;color:#fff;padding:12px 15px;font-size:10px;font-weight:900;letter-spacing:.08em;cursor:pointer}
+.sound-card{background:#050505;border:1px solid #222;padding:35px;position:relative;box-shadow:14px 14px 0 #ff2417}.sound-card h2{font-size:52px;line-height:.92;letter-spacing:-.06em;margin:10px 0 20px}.sound-card h2 span{color:#ff2417}.sound-card .redbar{height:7px;background:#ff2417;margin-bottom:28px}.sound-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.sound-item{text-align:center}.sound-item .ico{width:64px;height:64px;background:#ff2417;border-radius:8px;margin:0 auto 9px;display:flex;align-items:center;justify-content:center;font-size:31px}.sound-item b{font-size:13px;letter-spacing:.02em}.sound-logo{text-align:right;font-size:29px;font-weight:300;margin-top:25px}.sound-logo span{color:#ff2417}
+.ticker{background:#ff2417;color:#050505;overflow:hidden;white-space:nowrap;padding:17px 0;font-size:29px;font-weight:950}.ticker-track{display:inline-block;animation:marquee 18s linear infinite}.ticker i{font-style:normal;color:#fff;margin:0 11px}@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-30%)}}
+.process{padding:78px 0 88px;background:#fff}.process h2{font-size:64px;line-height:.88;letter-spacing:-.06em;margin:9px 0 32px}.process h2 span{color:#ff2417}.steps{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #ccc;border-left:1px solid #ccc}.step{padding:26px;border-right:1px solid #ccc;border-bottom:1px solid #ccc;min-height:150px}.step small{color:#ff2417;font-weight:900}.step b{display:block;margin-top:28px;font-size:13px}.step p{color:#777;font-size:11px;line-height:1.45}
+.site-footer{background:#050505;color:#fff;padding:28px 0}.site-footer .wrap{display:flex;justify-content:space-between;font-size:10px;font-weight:800}
+.ins-page{background:#f7f7f7;min-height:calc(100vh - 56px);padding:0 28px 70px}.ins-top{max-width:980px;margin:auto;height:74px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ddd}.ins-back{font-size:10px;font-weight:900;letter-spacing:.1em}.ins-logo{font-weight:900}.ins-grid{max-width:900px;margin:36px auto;display:grid;grid-template-columns:1fr 1.2fr;background:#fff}.ins-pitch{background:#050505;color:#fff;padding:35px;position:relative}.ins-pitch .music{color:#ff2417;font-size:30px}.ins-pitch .mini{color:#ff2417;font-size:9px;font-weight:900;letter-spacing:.16em;margin-top:35px}.ins-pitch h2{font-size:45px;line-height:.9;letter-spacing:-.06em;margin:12px 0 22px}.ins-pitch h2 span{color:#ff2417}.ins-pitch .line{height:5px;background:#ff2417;margin-bottom:24px}.ins-pitch p{color:#aaa;font-size:12px;line-height:1.55}.ins-pitch .secure{position:absolute;bottom:30px;left:35px;color:#aaa;font-size:10px}.ins-form{padding:32px 34px}.ins-form h2{font-size:36px;line-height:.9;letter-spacing:-.055em;margin:8px 0}.ins-form h2 span{color:#ff2417}.ins-form hr{border:0;border-top:1px solid #ddd;margin:21px 0}.ins-section-title{font-weight:900;font-size:12px;margin:11px 0 7px}.ins-submit{background:#ff2417;color:#fff;border:0;padding:15px;width:100%;font-weight:900;letter-spacing:.06em;cursor:pointer}
+@media(max-width:900px){.pubhero-grid,.ins-grid{grid-template-columns:1fr}.sound-grid{grid-template-columns:repeat(2,1fr)}.steps{grid-template-columns:1fr}.pubmenu{display:none}.ins-grid{max-width:650px}}
+@media(max-width:600px){.site-public{margin:-18px}.site-public .wrap{padding:0 18px}.pubhero{padding:48px 0}.pubhero h1{font-size:58px}.sound-card{padding:24px}.sound-card h2{font-size:42px}.ticker{font-size:22px}.process h2{font-size:48px}.ins-page{padding:0 16px 50px}.ins-pitch,.ins-form{padding:26px}.ins-pitch .secure{position:static;margin-top:30px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+<div class="logo">PALCO 21</div>
+<div class="role"><small>UTILIZADOR DE TESTE</small><select id="roleSelect"><option value="admin">Administrador</option><option value="teacher">Professor</option><option value="student">Aluno / Encarregado</option></select></div>
+<nav id="nav">
+<div class="navlabel">Gestão</div>
+<button data-page="dashboard">Dashboard</button>
+<button data-page="inscricoes">Inscrições</button>
+<button data-page="alunos">Alunos</button>
+<button data-page="horarios">Horários</button>
+<button data-page="professores">Professores</button>
+<button data-page="financeiro">Financeiro</button>
+<button data-page="comunicacao">Comunicação</button><button data-page="estatisticas">Estatísticas</button>
+<div class="navlabel">Pessoal</div>
+<button data-page="portal">A minha área</button>
+<button data-page="publico">Inscrição online</button>
+</nav>
+</aside>
+<main id="main"></main>
+</div>
+<div class="modal" id="modal"><div class="modalbox" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const storeKey="palco21_v12";
+const leadSessionKey="palco21_lead_session_v12";
+const seed={
+config:{duracaoAula:50,limiteRemarcacaoHoras:24,pagamentoProfessorPorAluno:20,emailAtivo:true,smsAtivo:true},
+utilizadores:[
+{id:1,role:"admin",username:"theo",email:"admin@palco21.pt"},
+{id:2,role:"teacher",professorId:2,username:"pedro",email:"pedro@palco21.pt"},
+{id:3,role:"student",alunoId:1,username:"joao.pereira",email:"joao@example.com"}
+],
+alunos:[
+{id:1,nome:"João Pereira",instrumento:"Guitarra",instrumentos:["Guitarra"],professor:"Pedro",sala:"Sala 1",email:"joao@example.com",telefone:"912000001",mensalidade:45,pago:true,info:"Levar cabo Jack para a aula.",alerta:"Audição em dezembro."},
+{id:2,nome:"Marta Alves",instrumento:"Piano",instrumentos:["Piano"],professor:"Ana",sala:"Sala 2",email:"marta@example.com",telefone:"912000002",mensalidade:45,pago:false,info:"Enviar repertório pop.",alerta:"Pagamento de setembro em falta."},
+{id:3,nome:"Inês Costa",instrumento:"Canto",instrumentos:["Canto"],professor:"Miguel",sala:"Sala 3",email:"ines@example.com",telefone:"912000003",mensalidade:50,pago:true,info:"Técnica vocal antes do repertório.",alerta:""}
+],
+professores:[
+{id:1,nome:"Ana",email:"ana@palco21.pt",telefone:"913000001",instrumentos:"Piano"},
+{id:2,nome:"Pedro",email:"pedro@palco21.pt",telefone:"913000002",instrumentos:"Guitarra, Baixo"},
+{id:3,nome:"Miguel",email:"miguel@palco21.pt",telefone:"913000003",instrumentos:"Canto"}
+],
+inscricoes:[
+{id:1,nome:"Martim Silva",instrumento:"Piano",origem:"QR Code",estado:"Novo pedido"},
+{id:2,nome:"Leonor Costa",instrumento:"Guitarra",origem:"Instagram",estado:"Contactado"}
+],
+series:[
+{id:1,dia:2,hora:"17:00",alunoId:1,professor:"Pedro",sala:"Sala 1",inicio:"2026-09-15",fim:"2027-06-30"},
+{id:2,dia:3,hora:"18:00",alunoId:2,professor:"Ana",sala:"Sala 2",inicio:"2026-09-16",fim:"2027-06-30"}
+],
+aulas:[
+{id:1,data:"2026-09-15",dia:"Terça",hora:"17:00",alunoId:1,professor:"Pedro",sala:"Sala 1",duracao:50,confirmada:false,remarcacao:null},
+{id:2,data:"2026-09-16",dia:"Quarta",hora:"18:00",alunoId:2,professor:"Ana",sala:"Sala 2",duracao:50,confirmada:false,remarcacao:null},
+{id:3,data:"2026-09-17",dia:"Quinta",hora:"19:00",alunoId:3,professor:"Miguel",sala:"Sala 3",duracao:50,confirmada:false,remarcacao:null}
+],
+movimentos:[
+{tipo:"Receita",descricao:"Mensalidades setembro",valor:140},
+{tipo:"Despesa",descricao:"Material",valor:35}
+],
+outbox:[],
+leads:[
+{id:101,source:"QR Code na porta",instrumento:"Guitarra",status:"contacto",nome:"Maria",email:"maria@example.com",telefone:"912000010",startedAt:"2026-09-14 10:10",contacted:false},
+{id:102,source:"Instagram",instrumento:"Piano",status:"started",nome:"",email:"",telefone:"",startedAt:"2026-09-14 10:25",contacted:false},
+{id:103,source:"QR Code na porta",instrumento:"Baixo",status:"completed",nome:"Rui",email:"rui@example.com",telefone:"912000011",startedAt:"2026-09-13 17:00",contacted:true}
+]
+};
+let db=load(), role="admin", pageName="dashboard";
+
+function load(){try{return JSON.parse(localStorage.getItem(storeKey))||structuredClone(seed)}catch(e){return structuredClone(seed)}}
+function save(){localStorage.setItem(storeKey,JSON.stringify(db))}
+function currentSession(){let id=sessionStorage.getItem(leadSessionKey);if(!id){id=Date.now().toString(36)+Math.random().toString(36).slice(2);sessionStorage.setItem(leadSessionKey,id)}return id}
+function ensureLead(source){const sid=currentSession();let lead=db.leads?.find(x=>x.sessionId===sid);if(!lead){if(!db.leads)db.leads=[];lead={id:Date.now(),sessionId:sid,source,Instrumento:"",instrumento:"",status:"visited",nome:"",email:"",telefone:"",startedAt:new Date().toLocaleString("pt-PT"),contacted:false};db.leads.push(lead);save()}else if(source&&lead.source!==source){lead.source=source;save()}return lead}
+function leadBySession(){const sid=sessionStorage.getItem(leadSessionKey);return sid&&db.leads?db.leads.find(x=>x.sessionId===sid):null}
+function updateLead(fields){const l=leadBySession();if(!l)return;Object.assign(l,fields);save()}
+function leadVisit(source){const l=ensureLead(source);if(l.status==="visited")l.lastSeen=new Date().toLocaleString("pt-PT");save();return l}
+
+function resetDemo(){db=structuredClone(seed);save();go("dashboard");toast("Dados de demonstração repostos")}
+function toast(t){const el=document.getElementById("toast");el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200)}
+function title(k,t,s){return `<div class="eyebrow">${k}</div><h1>${t}</h1><div class="sub">${s}</div>`}
+function modal(html){document.getElementById("modalBox").innerHTML=html;document.getElementById("modal").classList.add("open")}
+function closeModal(){document.getElementById("modal").classList.remove("open")}
+document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal()});
+
+const pages={
+dashboard:renderDashboard,inscricoes:renderInscricoes,alunos:renderAlunos,horarios:renderHorarios,
+professores:renderProfessores,financeiro:renderFinanceiro,comunicacao:renderComunicacao,portal:renderPortal,publico:renderPublico,inscricao:renderInscricao,estatisticas:renderEstatisticas
+};
+const access={
+admin:["dashboard","inscricoes","alunos","horarios","professores","financeiro","comunicacao","portal","publico","inscricao","estatisticas"],
+teacher:["dashboard","alunos","horarios","portal","publico","inscricao"],
+student:["dashboard","portal","publico","inscricao"]
+};
+function nav(){
+document.querySelectorAll("#nav button").forEach(b=>{
+const visible=access[role].includes(b.dataset.page);b.style.display=visible?"block":"none";b.classList.toggle("active",b.dataset.page===pageName)
+})
+}
+function go(p){if(!access[role].includes(p))p=role==="student"?"portal":"dashboard";pageName=p;nav();pages[p]()}
+document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.page)));
+document.getElementById("roleSelect").addEventListener("change",e=>{role=e.target.value;go(role==="student"?"portal":"dashboard")});
+
+function renderDashboard(){
+if(role==="admin"){
+const due=db.alunos.filter(a=>!a.pago).length, newIns=db.inscricoes.filter(i=>i.estado==="Novo pedido").length, rebooks=db.aulas.filter(a=>a.remarcacao==="pendente").length;
+main.innerHTML=title("ADMINISTRADOR","Centro de controlo","Toda a operação do Palco 21 num só lugar.");
+main.innerHTML+=`<div class="section card"><div class="row"><div><div class="eyebrow">FOLLOW-UP</div><h2 style="margin:4px 0">Estatísticas de captação</h2><div class="label">O que acontece depois de alguém entrar no QR Code / Instagram.</div></div><button class="btn" data-action="lead-stats">Abrir estatísticas</button></div></div>`;
+main.innerHTML+=`<div class="grid">
+<div class="card"><div class="label">Alunos ativos</div><div class="metric">${db.alunos.length}</div></div>
+<div class="card"><div class="label">Novas inscrições</div><div class="metric">${newIns}</div></div>
+<div class="card"><div class="label">Pagamentos em falta</div><div class="metric">${due}</div></div>
+<div class="card"><div class="label">Remarcações pendentes</div><div class="metric">${rebooks}</div></div></div>
+<div class="section grid3">
+<div class="card"><h2>Ações rápidas</h2><button class="btn" data-action="add-student">+ Adicionar aluno</button><button class="btn light" data-action="add-professor" style="margin-left:7px">+ Professor</button><button class="btn light" data-action="add-lesson" style="margin-top:8px">+ Horário</button></div>
+<div class="card"><h2>Automatizações</h2><div class="statline">Email <b>ATIVO</b></div><div class="statline">SMS <b>ATIVO</b></div><p class="label">Cobranças e comunicações preparadas.</p></div>
+<div class="card"><h2>Dados de teste</h2><button class="btn light" data-action="reset">Repor demonstração</button><p class="label">Usa isto para testar sem medo.</p></div></div>
+<div class="section card"><h2>Pedidos de remarcação</h2>${rebooks?db.aulas.filter(a=>a.remarcacao==="pendente").map(remCard).join(""):"<div class='label'>Nenhum pedido pendente.</div>"}</div>`;
+return}
+if(role==="teacher"){
+const mine=db.aulas.filter(a=>a.professor==="Pedro"), req=mine.filter(a=>a.remarcacao==="pendente");
+main.innerHTML=title("PROFESSOR","Área do professor","Horário, alunos e pedidos que precisam de resposta.");
+main.innerHTML+=`<div class="grid3"><div class="card"><div class="label">Minhas aulas</div><div class="metric">${mine.length}</div></div><div class="card"><div class="label">Meus alunos</div><div class="metric">${db.alunos.filter(a=>a.professor==="Pedro").length}</div></div><div class="card"><div class="label">Pedidos de remarcação</div><div class="metric">${req.length}</div></div></div>
+<div class="section card"><button class="btn" data-action="add-lesson">+ Adicionar aula</button><button class="btn light" data-action="show-students" style="margin-left:7px">Ver os meus alunos</button></div>
+<div class="section card"><h2>Pedidos de remarcação</h2>${req.length?req.map(remCard).join(""):"<div class='label'>Nada pendente.</div>"}</div>`;
+return}
+const a=db.alunos[0];
+main.innerHTML=title("ALUNO / ENCARREGADO","A minha área","Só tens acesso às tuas aulas e informação.");
+main.innerHTML+=`<div class="section card"><h2>Próxima aula</h2><div class="big">Terça-feira · 15/09 · 17:00</div><p>${next.instrumento||studentInstruments(a).join(", ")} · ${next.professor} · ${next.sala} · 50 minutos</p><button class="btn ok" data-action="portal">Ver e confirmar</button></div>
+<div class="section card"><h2>Informações importantes</h2><p>${a.info}</p><div class="notice">${a.alerta||"Sem avisos."}</div></div>`
+}
+
+function remCard(a){const al=db.alunos.find(x=>x.id===a.alunoId);return `<div class="queue"><div style="flex:1"><b>${al?.nome||"Aluno"}</b> · ${a.data} ${a.hora}<br><span class="label">${al?.instrumento||""} · ${a.sala} · pedido de remarcação</span></div><button class="btn ok" data-approve="${a.id}">Aprovar</button><button class="btn bad" data-reject="${a.id}">Recusar</button></div>`}
+
+function renderInscricoes(){
+if(role!=="admin"){go("dashboard");return}
+main.innerHTML=title("ADMINISTRADOR","Inscrições","Pedidos do QR Code, redes sociais e site. Leads que não concluíram também ficam aqui para follow-up.");
+main.innerHTML+=`<div class="card"><div class="row"><h2>Pipeline</h2><button class="btn" data-action="add-inscription">+ Nova inscrição</button></div><div class="tablewrap"><table><tr><th>Nome</th><th>Instrumento</th><th>Origem</th><th>Estado</th><th>Ação</th></tr>${db.inscricoes.map(i=>`<tr><td>${i.nome}</td><td>${i.instrumento}</td><td>${i.origem}</td><td>${state(i.estado)}</td><td><button class="btn light" data-advance="${i.id}">Avançar</button></td></tr>`).join("")}</table></div></div>`
+}
+function state(s){const c=s==="Novo pedido"?"warning":s==="Contactado"?"bluebg":s==="Inscrito"?"good":"redbg";return `<span class="badge ${c}">${s}</span>`}
+
+function studentInstruments(a){return Array.isArray(a.instrumentos)&&a.instrumentos.length?a.instrumentos:(a.instrumento?[a.instrumento]:[])}
+function renderAlunos(){
+let list=role==="teacher"?db.alunos.filter(a=>a.professor==="Pedro"):db.alunos;
+main.innerHTML=title(role==="teacher"?"PROFESSOR":"ADMINISTRADOR","Alunos",role==="teacher"?"Os teus alunos e informação pedagógica.":"Fichas, pagamentos e informação dos alunos.");
+main.innerHTML+=`<div class="card"><div class="row"><h2>${role==="teacher"?"Os meus alunos":"Todos os alunos"}</h2>${role==="admin"?'<button class="btn" data-action="add-student">+ Adicionar aluno</button>':""}</div><div class="tablewrap"><table><tr><th>Aluno</th><th>Instrumento</th><th>Professor</th><th>Mensalidade</th><th>Estado</th><th>Informação</th></tr>${list.map(a=>`<tr><td>${a.nome}</td><td>${studentInstruments(a).join(", ")}</td><td>${a.professor}</td><td>€${a.mensalidade}</td><td>${a.pago?'<span class="badge good">Pago</span>':'<span class="badge redbg">Em falta</span>'}</td><td><button class="btn light" data-info="${a.id}">Ver / editar</button></td></tr>`).join("")}</table></div></div>`
+}
+
+function renderHorarios(){
+if(role==="student"){renderPortal();return}
+const arr=role==="teacher"?db.aulas.filter(a=>a.professor==="Pedro"):db.aulas;
+main.innerHTML=title(role==="teacher"?"PROFESSOR":"ADMINISTRADOR","Horários","Aulas de 50 minutos. "+(role==="teacher"?"Podes adicionar aulas para os teus alunos e apenas podes sobrepor horários entre eles.":"Podes adicionar horários manualmente; os conflitos ficam bloqueados."));
+main.innerHTML+=`<div class="section card"><div class="row"><h2>Semana</h2><button class="btn" data-action="add-lesson">+ Adicionar horário</button></div><div class="grid3">${["Segunda","Terça","Quarta","Quinta","Sexta"].map(d=>`<div class="card"><h2>${d}</h2>${arr.filter(a=>a.dia===d).map(a=>{const al=db.alunos.find(x=>x.id===a.alunoId);return `<div class="slot"><b>${a.hora}</b> · ${al?.nome||""}<br><span class="label">${a.instrumento||studentInstruments(al||{}).join(", ")} · ${a.professor} · ${a.sala} · ${a.duracao} min</span>${a.remarcacao==="pendente"?'<br><span class="badge warning">Remarcação pendente</span>':""}</div>`}).join("")||"<div class='label'>Sem aulas</div>"}</div>`).join("")}</div></div>`
+}
+
+function renderProfessores(){
+if(role!=="admin"){go("dashboard");return}
+main.innerHTML=title("ADMINISTRADOR","Professores","Perfis e credenciais de acesso.");
+main.innerHTML+=`<div class="grid3">${db.professores.map(p=>{const u=db.utilizadores.find(x=>x.professorId===p.id);return `<div class="card"><h2>${p.nome}</h2><p class="label">${p.instrumentos}</p><p>${p.email}<br>${p.telefone}</p><div class="statline">Username <b>${u?.username||"—"}</b></div><button class="btn light" data-reset-prof="${p.id}">Alterar acesso</button></div>`}).join("")}</div>
+<div class="section card"><button class="btn" data-action="add-professor">+ Criar perfil de professor</button></div>`
+}
+
+function renderFinanceiro(){
+if(role!=="admin"){go("dashboard");return}
+const r=db.movimentos.filter(x=>x.tipo==="Receita").reduce((s,x)=>s+x.valor,0),d=db.movimentos.filter(x=>x.tipo==="Despesa").reduce((s,x)=>s+x.valor,0);
+const rows=db.professores.map(p=>{const n=db.alunos.filter(a=>a.professor===p.nome).length;return {p,n,total:n*db.config.pagamentoProfessorPorAluno}}),total=rows.reduce((s,x)=>s+x.total,0);
+main.innerHTML=title("ADMINISTRADOR","Financeiro","Receitas, despesas e pagamentos mensais aos professores.");
+main.innerHTML+=`<div class="grid"><div class="card"><div class="label">Receitas</div><div class="metric">€${r}</div></div><div class="card"><div class="label">Despesas</div><div class="metric">€${d}</div></div><div class="card"><div class="label">Pagamentos professores</div><div class="metric">€${total}</div></div><div class="card"><div class="label">Saldo operacional</div><div class="metric">€${r-d-total}</div></div></div>
+<div class="section card"><div class="row"><h2>Pagamento aos professores</h2><span class="badge bluebg">€${db.config.pagamentoProfessorPorAluno} / aluno</span></div><div class="tablewrap"><table><tr><th>Professor</th><th>Alunos</th><th>Valor/aluno</th><th>Total mensal</th></tr>${rows.map(x=>`<tr><td>${x.p.nome}</td><td>${x.n}</td><td>€${db.config.pagamentoProfessorPorAluno}</td><td><b>€${x.total}</b></td></tr>`).join("")}<tr><td colspan="3"><b>Total</b></td><td><b>€${total}</b></td></tr></table></div></div>`
+}
+
+function renderComunicacao(){
+if(role!=="admin"){go("dashboard");return}
+main.innerHTML=title("ADMINISTRADOR","Comunicação","Fila e regras para emails e SMS.");
+main.innerHTML+=`<div class="grid3"><div class="card"><h2>📧 Email</h2><p class="label">Lembretes de pagamentos e envio de acessos.</p><button class="btn light" data-action="test-email">Enviar teste</button></div><div class="card"><h2>📱 SMS</h2><p class="label">Lembretes rápidos de pagamento.</p><button class="btn light" data-action="test-sms">Enviar teste</button></div><div class="card"><h2>🔔 Remarcações</h2><p class="label">Aluno pede até 24h antes; professor aprova.</p></div></div>
+<div class="section card"><div class="row"><h2>Mensalidades em falta</h2><button class="btn" data-action="send-reminders">Enviar lembretes</button></div>${db.alunos.filter(a=>!a.pago).map(a=>`<div class="queue"><div style="flex:1"><b>${a.nome}</b><br><span class="label">€${a.mensalidade} · ${a.email} · ${a.telefone}</span></div><span class="badge redbg">Em falta</span></div>`).join("")}</div>
+<div class="section card"><h2>Fila de envios</h2>${db.outbox.length?db.outbox.slice().reverse().map(x=>`<div class="queue"><div style="flex:1"><b>${x.canal}</b> · ${x.destino}<br><span class="label">${x.assunto}</span></div><span class="badge good">Preparado</span></div>`).join(""):"<div class='label'>Sem envios.</div>"}</div>
+<div class="section card"><h2>Importante</h2><p class="label">Nesta versão os emails/SMS são colocados numa fila. O envio real será ligado no backend a um fornecedor externo.</p></div>`
+}
+
+function renderPortal(){
+const a=db.alunos[0], lessons=db.aulas.filter(x=>x.alunoId===a.id), next=lessons[0];
+let allowed=next && ((new Date(next.data+"T"+next.hora)-new Date())/36e5>=24);
+main.innerHTML=title("ALUNO / ENCARREGADO","A minha área","Só aparecem as tuas aulas, informação e pedidos.");
+main.innerHTML+=`<div class="banner" style="background:#111;color:#fff;border-radius:18px;padding:22px"><div class="eyebrow" style="color:#aaa">PRÓXIMA AULA</div><div class="big">${next?.data||"—"} · ${next?.dia||""} · ${next?.hora||""}</div><p>${a.instrumento} · ${a.professor} · ${a.sala} · 50 minutos</p>${next?`<button class="btn ok" data-confirm="${next.id}">${next.confirmada?"✓ Confirmada":"Confirmar aula"}</button>${allowed?`<button class="btn light" data-rebook="${next.id}" style="margin-left:8px">Solicitar remarcação</button>`:"<p class='label' style='color:#ddd'>A remarcação só está disponível até 24h antes da aula.</p>"}`:""}</div>
+<div class="section card"><h2>Informações importantes</h2><p>${a.info||"Sem informação."}</p>${a.alerta?`<div class="notice">${a.alerta}</div>`:""}</div>
+<div class="section card"><h2>As minhas aulas</h2>${lessons.map(x=>`<div class="slot"><b>${x.data} · ${x.hora}</b> — ${x.instrumento||studentInstruments(a).join(", ")}<br><span class="label">${x.professor} · ${x.sala} · ${x.duracao} min</span><br>${x.remarcacao==="pendente"?'<span class="badge warning">Aguardar aprovação</span>':x.remarcacao==="aprovada"?'<span class="badge good">Remarcação aprovada</span>':x.confirmada?'<span class="badge good">Confirmada</span>':'<span class="badge">Por confirmar</span>'}</div>`).join("")}</div>`
+}
+
+function renderPublico(){
+const lead=leadVisit("QR Code na porta");
+main.innerHTML=`<div class="site-public">
+<div class="pubtop wrap"><div class="pubbrand">palco<span>21</span></div><div class="pubmenu"><a href="#aulas">AULAS</a><a href="#processo">COMO FUNCIONA</a></div><button class="pubred" data-go-inscricao>QUERO INSCREVER-ME →</button></div>
+<section class="pubhero"><div class="wrap pubhero-grid">
+<div><div class="pubkicker">♩ ESCOLA DE MÚSICA</div><h1>FAZ DA<br>MÚSICA O<br>TEU <span>PALCO.</span></h1><div class="publine"></div><p>Aulas de música para quem quer aprender, experimentar e tocar a sério. Do primeiro acorde ao próximo concerto. Há espaço para todos os ritmos.</p><div style="display:flex;gap:10px;margin-top:25px;flex-wrap:wrap"><button class="pubred" data-go-inscricao>QUERO INSCREVER-ME →</button><button class="pubghost" data-scroll-aulas>VER AULAS</button></div><div style="font-size:9px;color:#888;font-weight:900;letter-spacing:.12em;margin-top:17px">⌁ INSCRIÇÕES ONLINE · QR CODE NA PORTA</div></div>
+<div class="sound-card"><div class="pubkicker">A TUA PRIMEIRA NOTA</div><h2>ESCOLHE<br>O TEU <span>SOM.</span></h2><div class="redbar"></div><div class="sound-grid">
+<div class="sound-item" data-interest="Bateria"><div class="ico">🥁</div><b>BATERIA</b></div><div class="sound-item" data-interest="Canto"><div class="ico">🎤</div><b>CANTO</b></div><div class="sound-item" data-interest="Baixo"><div class="ico">🎸</div><b>BAIXO</b></div>
+<div class="sound-item" data-interest="Guitarra"><div class="ico">🎸</div><b>GUITARRA</b></div><div class="sound-item" data-interest="Piano"><div class="ico">🎹</div><b>PIANO</b></div><div class="sound-item" data-interest="Outro"><div class="ico">＋</div><b>OUTROS</b></div>
+</div><div class="sound-logo">palco<span>21</span></div></div>
+</div></section>
+<div class="ticker"><div class="ticker-track">BATERIA <i>✦</i> CANTO <i>✦</i> BAIXO <i>✦</i> GUITARRA <i>✦</i> PIANO <i>✦</i> OUTROS <i>✦</i></div></div>
+<section class="process" id="processo"><div class="wrap"><div class="pubkicker">O PROCESSO</div><h2>DO PRIMEIRO<br><span>ACORDE.</span></h2><div class="steps"><div class="step"><small>01</small><b>CLICAS EM INSCREVER-ME</b><p>Abres a ficha de inscrição e deixas os teus dados.</p></div><div class="step"><small>02</small><b>FALAMOS CONTIGO</b><p>Percebemos o instrumento, o nível e o horário.</p></div><div class="step"><small>03</small><b>COMEÇAS A TOCAR</b><p>Marcamos a primeira aula e dás início ao teu som.</p></div></div></div></section>
+<div class="site-footer"><div class="wrap"><span>palco21</span><span>INSCRIÇÕES ONLINE</span></div></div></div>`;
+document.querySelectorAll("[data-go-inscricao]").forEach(b=>b.addEventListener("click",()=>go("inscricao")));
+document.querySelector("[data-scroll-aulas]")?.addEventListener("click",()=>document.getElementById("processo").scrollIntoView({behavior:"smooth"}));
+document.querySelectorAll("[data-interest]").forEach(el=>el.addEventListener("click",()=>{updateLead({instrumento:el.dataset.interest,status:"interested"});go("inscricao")}));
+}
+function renderInscricao(){
+const l=leadVisit("Formulário de interesse"); if(l.status!=="completed") updateLead({status:"started"});
+main.innerHTML=`<div class="ins-page"><div class="ins-top"><div class="ins-back" data-go-publico>← PALCO 21</div><div class="ins-logo">palco21</div></div>
+<div class="ins-grid">
+<div class="ins-pitch"><div class="music">♪</div><div class="mini">A TUA PRÓXIMA AULA</div><h2>QUERES<br>APRENDER<br><span>MÚSICA?</span></h2><div class="line"></div><p>Escolhe o instrumento e envia-nos os teus dados. Entramos em contacto para encontrar o melhor horário.</p><div class="secure">◉ Os teus dados são tratados com segurança.</div></div>
+<div class="ins-form"><div class="eyebrow">INSCRIÇÃO</div><h2>VAMOS<br>CONHECER-<span>TE.</span></h2><p class="label">Podes enviar o pedido mesmo sem preencher todos os dados. Quanto mais informação deixares, mais fácil será entrarmos em contacto.</p>
+<form id="publicForm">
+<div class="ins-section-title full">DADOS DO ALUNO</div>
+<input name="nome" placeholder="Nome do aluno"><input name="dataNascimento" type="date" placeholder="Data de nascimento">
+<select name="instrumento"><option value="">Instrumento pretendido</option><option>Piano</option><option>Guitarra</option><option>Canto</option><option>Bateria</option><option>Baixo</option><option>Outro</option></select>
+<select name="nivel"><option>Ainda não sei</option><option>Iniciação</option><option>Intermédio</option><option>Avançado</option></select>
+<input name="preferencia" placeholder="Preferência de horário · Ex.: depois das 17h"><div></div>
+<hr class="full">
+<div class="ins-section-title full">CONTACTO DO ENCARREGADO</div>
+<input name="encarregado" placeholder="Nome do encarregado"><input name="telefone" placeholder="Telefone">
+<input name="email" type="email" placeholder="Email">
+<div class="full"><div class="ins-section-title">TIPO DE CONTACTO PREFERIDO</div><div style="display:flex;gap:18px;flex-wrap:wrap"><label class="checkrow"><input type="radio" name="contactoPreferido" value="Chamada"> Chamada</label><label class="checkrow"><input type="radio" name="contactoPreferido" value="Email"> Email</label><label class="checkrow"><input type="radio" name="contactoPreferido" value="WhatsApp"> WhatsApp</label></div></div>
+<hr class="full">
+<select name="origem"><option>Como conheceste o Palco 21?</option><option>Instagram</option><option>Facebook</option><option>Google</option><option>QR Code na porta</option><option>Amigos / família</option><option>Outro</option></select><div></div>
+<textarea name="obs" class="full" rows="4" placeholder="Observações · Conta-nos algo importante."></textarea>
+<label class="checkrow full"><input type="checkbox" required> Autorizo o tratamento dos meus dados para resposta a este pedido.</label>
+<button class="ins-submit full">ENVIAR PEDIDO DE INSCRIÇÃO →</button>
+</form></div></div></div>`;
+document.querySelector("[data-go-publico]").addEventListener("click",()=>go("publico"));
+document.getElementById("publicForm").querySelector('[name="instrumento"]')?.addEventListener('change',e=>updateLead({instrumento:e.target.value||"Outro",status:"started"}));
+document.getElementById("publicForm").addEventListener("submit",e=>{e.preventDefault();const f=new FormData(e.target);db.inscricoes.push({id:Date.now(),nome:f.get("nome"),instrumento:f.get("instrumento")||"Outro",origem:f.get("origem")||"Formulário público",estado:"Novo pedido"});updateLead({nome:f.get("nome"),email:f.get("email"),telefone:f.get("telefone"),instrumento:f.get("instrumento")||"Outro",contactoPreferido:f.get("contactoPreferido"),status:"completed",completedAt:new Date().toLocaleString("pt-PT")});save();e.target.reset();toast("Pedido enviado ao Palco 21");setTimeout(()=>go("publico"),500)});
+}
+
+function renderEstatisticas(){
+if(role!=="admin"){go("dashboard");return}
+const leads=db.leads||[]; const total=leads.length, started=leads.filter(x=>["started","contacto","completed"].includes(x.status)).length, contacts=leads.filter(x=>x.status==="contacto"||x.status==="completed").length, completed=leads.filter(x=>x.status==="completed").length, follow=leads.filter(x=>x.status!=="completed"&&x.email||x.telefone).filter(x=>!x.contacted);
+const by={}; leads.forEach(x=>{const k=x.source||"Desconhecida";by[k]??={visits:0,contacts:0,completed:0};by[k].visits++;if(x.status==="contacto")by[k].contacts++;if(x.status==="completed")by[k].completed++});
+const conv=n=>total?Math.round(n/total*100):0;
+main.innerHTML=title("ADMINISTRADOR","Estatísticas de captação","O objetivo é perceber quem chegou ao Palco 21, quem mostrou interesse e quem merece follow-up.")+
+`<div class="grid"><div class="card"><div class="label">Visitas / leads</div><div class="metric">${total}</div></div><div class="card"><div class="label">Começaram inscrição</div><div class="metric">${started}</div></div><div class="card"><div class="label">Deixaram contacto</div><div class="metric">${contacts}</div></div><div class="card"><div class="label">Inscrições concluídas</div><div class="metric">${completed}</div></div></div>
+<div class="section card"><h2>Conversão</h2><div class="statline">Visitou → começou <b>${conv(started)}%</b></div><div class="statline">Visitou → deixou contacto <b>${conv(contacts)}%</b></div><div class="statline">Visitou → concluiu inscrição <b>${conv(completed)}%</b></div></div>
+<div class="section card"><h2>Origem</h2><div class="tablewrap"><table><tr><th>Origem</th><th>Acessos</th><th>Contactos</th><th>Inscrições</th><th>Conversão</th></tr>${Object.entries(by).map(([k,v])=>`<tr><td>${k}</td><td>${v.visits}</td><td>${v.contacts}</td><td>${v.completed}</td><td>${v.visits?Math.round(v.completed/v.visits*100):0}%</td></tr>`).join("")}</table></div></div>
+<div class="section card"><div class="row"><h2>Follow-up recomendado</h2><span class="badge redbg">${follow.length} por contactar</span></div><p class="label">São pessoas que deixaram email/telefone mas ainda não concluíram a inscrição. O sistema não envia automaticamente sem autorização; podes iniciar o contacto a partir daqui.</p>${follow.length?follow.map(l=>`<div class="queue"><div style="flex:1"><b>${l.nome||"Lead sem nome"}</b> · ${l.instrumento||"Instrumento não definido"}<br><span class="label">${l.email||""} ${l.telefone?"· "+l.telefone:""} · ${l.contactoPreferido?`Prefere: ${l.contactoPreferido} · `:""}${l.source||""}</span></div><button class="btn light" data-contact-lead="${l.id}">Preparar contacto</button></div>`).join(""):"<div class='label'>Não há contactos pendentes.</div>"}</div>
+<div class="section card"><h2>Canal preferido</h2><div class="grid3">
+<div class="card"><div class="label">Chamada</div><div class="metric">${leads.filter(x=>x.contactoPreferido==="Chamada").length}</div></div>
+<div class="card"><div class="label">Email</div><div class="metric">${leads.filter(x=>x.contactoPreferido==="Email").length}</div></div>
+<div class="card"><div class="label">WhatsApp</div><div class="metric">${leads.filter(x=>x.contactoPreferido==="WhatsApp").length}</div></div>
+</div></div>`;
+}
+/* ----- MODALS / ACTIONS ----- */
+function studentModal(id=null){
+const a=id?db.alunos.find(x=>x.id===id):null;
+const current=studentInstruments(a||{});
+const instruments=["Piano","Guitarra","Canto","Bateria","Baixo","Outro"];
+modal(`<div class="row"><h2>${a?"Editar aluno":"Adicionar aluno"}</h2><button class="btn light" data-close>Fechar</button></div>
+<p class="label">Um aluno pode frequentar vários instrumentos. Seleciona todos os instrumentos aplicáveis; o horário de cada aula define o professor e a sala.</p>
+<form id="studentForm">
+<input name="nome" placeholder="Nome" value="${a?.nome||""}" required>
+<input name="email" type="email" placeholder="Email" value="${a?.email||""}" required>
+<input name="telefone" placeholder="Telefone" value="${a?.telefone||""}">
+<div class="full"><div class="label" style="margin-bottom:6px">Instrumentos *</div><div style="display:flex;gap:14px;flex-wrap:wrap">${instruments.map(i=>`<label class="checkrow"><input type="checkbox" name="instrumentos" value="${i}" ${current.includes(i)?"checked":""}> ${i}</label>`).join("")}</div></div>
+<select name="professor">${db.professores.map(p=>`<option ${a?.professor===p.nome?"selected":""}>${p.nome}</option>`).join("")}</select>
+<input name="sala" placeholder="Sala principal" value="${a?.sala||""}">
+<input name="mensalidade" type="number" min="0" value="${a?.mensalidade||45}">
+<input name="username" placeholder="Username" value="${a?db.utilizadores.find(u=>u.alunoId===a.id)?.username||"":""}" required>
+<input name="password" type="password" placeholder="${a?"Nova password (opcional)":"Password"}" ${a?"":"required"}>
+<textarea name="info" class="full" rows="3" placeholder="Informações importantes">${a?.info||""}</textarea>
+<button class="btn full">${a?"Guardar alterações":"Criar aluno e preparar email"}</button></form>`);
+document.getElementById("studentForm").addEventListener("submit",e=>saveStudent(e,id))
+}
+function saveStudent(e,id){
+e.preventDefault();const f=new FormData(e.target),username=f.get("username"),password=f.get("password");
+const instruments=f.getAll("instrumentos");
+if(!instruments.length){toast("Seleciona pelo menos um instrumento.");return}
+if(db.utilizadores.some(u=>u.username===username&&u.alunoId!==id)){toast("Username já utilizado.");return}
+let a=id?db.alunos.find(x=>x.id===id):null;
+if(!a){const aid=Date.now();a={id:aid,pago:false,alerta:""};db.alunos.push(a);db.utilizadores.push({id:aid,role:"student",alunoId:aid,username,email:f.get("email"),password})}
+Object.assign(a,{nome:f.get("nome"),email:f.get("email"),telefone:f.get("telefone"),instrumentos,instrumento:instruments[0],professor:f.get("professor"),sala:f.get("sala"),mensalidade:+f.get("mensalidade"),info:f.get("info")});
+let u=db.utilizadores.find(x=>x.alunoId===a.id);if(u){u.username=username;u.email=f.get("email");if(password)u.password=password}
+if(!id)db.outbox.push({canal:"EMAIL",destino:a.email,assunto:"Dados de acesso — Palco 21"});
+save();closeModal();go("alunos");toast(a?"Aluno atualizado":"Aluno criado e email preparado")
+}
+function professorModal(id=null){
+const p=id?db.professores.find(x=>x.id===id):null,u=p?db.utilizadores.find(x=>x.professorId===p.id):null;
+modal(`<div class="row"><h2>${p?"Alterar acesso":"Criar perfil de professor"}</h2><button class="btn light" data-close>Fechar</button></div>
+<form id="profForm"><input name="nome" placeholder="Nome" value="${p?.nome||""}" required><input name="email" type="email" placeholder="Email" value="${p?.email||""}" required><input name="telefone" placeholder="Telefone" value="${p?.telefone||""}"><input name="inst" placeholder="Instrumentos" value="${p?.instrumentos||""}"><input name="username" placeholder="Username" value="${u?.username||""}" required><input name="password" type="password" placeholder="${p?"Nova password (opcional)":"Password"}" ${p?"":"required"}><button class="btn full">${p?"Guardar":"Criar perfil e preparar email"}</button></form>`);
+document.getElementById("profForm").addEventListener("submit",e=>saveProfessor(e,id))
+}
+function saveProfessor(e,id){
+e.preventDefault();const f=new FormData(e.target),username=f.get("username"),password=f.get("password");
+if(db.utilizadores.some(u=>u.username===username&&u.professorId!==id)){toast("Username já utilizado.");return}
+let p=id?db.professores.find(x=>x.id===id):null;
+if(!p){const pid=Date.now();p={id:pid};db.professores.push(p);db.utilizadores.push({id:pid,role:"teacher",professorId:pid,username,email:f.get("email"),password})}
+Object.assign(p,{nome:f.get("nome"),email:f.get("email"),telefone:f.get("telefone"),instrumentos:f.get("inst")});
+let u=db.utilizadores.find(x=>x.professorId===p.id);if(u){u.username=username;u.email=f.get("email");if(password)u.password=password}
+if(!id)db.outbox.push({canal:"EMAIL",destino:p.email,assunto:"Dados de acesso — Palco 21"});
+save();closeModal();go("professores");toast("Perfil de professor guardado")
+}
+function lessonModal(){
+const teacherMode=role==="teacher", teacher=teacherMode?"Pedro":db.professores[0]?.nome;
+const students=teacherMode?db.alunos.filter(a=>a.professor===teacher):db.alunos;
+modal(`<div class="row"><h2>Adicionar horário</h2><button class="btn light" data-close>Fechar</button></div>
+<p class="label">Aulas de 50 minutos. Um aluno pode ter vários instrumentos; escolhe aqui qual deles está a ser marcado.</p>
+<form id="lessonForm">
+<select name="dia"><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option></select>
+<input name="hora" type="time" value="17:00">
+<select name="alunoId" id="lessonStudent">${students.map(a=>`<option value="${a.id}">${a.nome}</option>`).join("")}</select>
+<select name="instrumento" id="lessonInstrument"></select>
+${teacherMode?`<input type="hidden" name="professor" value="${teacher}">`:`<select name="professor">${db.professores.map(p=>`<option>${p.nome}</option>`).join("")}</select>`}
+<input name="sala" placeholder="Sala">
+<input type="date" name="inicio" value="2026-09-15"><input type="date" name="fim" value="2026-09-30">
+<button class="btn full">Criar aulas semanais</button></form>`);
+function updateLessonInstruments(){
+ const a=db.alunos.find(x=>x.id===+document.getElementById("lessonStudent").value);
+ const arr=studentInstruments(a||{});
+ document.getElementById("lessonInstrument").innerHTML=arr.map(i=>`<option>${i}</option>`).join("");
+}
+document.getElementById("lessonStudent").addEventListener("change",updateLessonInstruments);
+updateLessonInstruments();
+document.getElementById("lessonForm").addEventListener("submit",e=>saveLesson(e))
+}
+function overlap(a,b){if(a.dia!==b.dia)return false;const m=t=>{const [h,min]=t.split(":").map(Number);return h*60+min};return Math.abs(m(a.hora)-m(b.hora))<50}
+function saveLesson(e){
+e.preventDefault();const f=new FormData(e.target), dia=+f.get("dia"),hora=f.get("hora"),prof=f.get("professor"),sala=f.get("sala"),alunoId=+f.get("alunoId"),instrumento=f.get("instrumento");
+const candidate={dia,hora,professor:prof,sala,alunoId};
+const conflicts=db.series.filter(s=>overlap(s,candidate));
+if(role==="admin"&&conflicts.length){toast("Horário bloqueado: já existe uma sobreposição.");return}
+if(role==="teacher"&&(conflicts.some(s=>s.professor!==prof||db.alunos.find(a=>a.id===s.alunoId)?.professor!==prof)||db.alunos.find(a=>a.id===alunoId)?.professor!==prof)){toast("Só podes sobrepor aulas dos teus próprios alunos.");return}
+const sid=Date.now(),map={1:"Segunda",2:"Terça",3:"Quarta",4:"Quinta",5:"Sexta"};
+db.series.push({id:sid,dia,hora,alunoId,professor:prof,sala,inicio:f.get("inicio"),fim:f.get("fim"),instrumento});
+let d=new Date(f.get("inicio")+"T12:00:00"),end=new Date(f.get("fim")+"T12:00:00"),n=0;
+while(d<=end&&n<60){if(d.getDay()===dia){db.aulas.push({id:sid+n,data:d.toISOString().slice(0,10),dia:map[dia],hora,alunoId,professor:prof,sala,instrumento,duracao:50,confirmada:false,remarcacao:null});n++}d.setDate(d.getDate()+1)}
+save();closeModal();go("horarios");toast(n+" aulas criadas")
+}
+function inscriptionModal(){
+modal(`<div class="row"><h2>Nova inscrição</h2><button class="btn light" data-close>Fechar</button></div><form id="insForm"><input name="nome" placeholder="Nome" required><input name="telefone" placeholder="Telefone" required><input name="email" placeholder="Email"><select name="instrumento"><option>Piano</option><option>Guitarra</option><option>Canto</option><option>Bateria</option><option>Baixo</option></select><select name="origem"><option>Admin</option><option>QR Code</option><option>Instagram</option><option>Facebook</option><option>Site</option></select><button class="btn full">Guardar inscrição</button></form>`);
+document.getElementById("insForm").addEventListener("submit",e=>{e.preventDefault();const f=new FormData(e.target);db.inscricoes.push({id:Date.now(),nome:f.get("nome"),instrumento:f.get("instrumento"),origem:f.get("origem"),estado:"Novo pedido"});save();closeModal();go("inscricoes");toast("Inscrição criada")})
+}
+function editInfo(id){const a=db.alunos.find(x=>x.id===id);modal(`<div class="row"><h2>Informação — ${a.nome}</h2><button class="btn light" data-close>Fechar</button></div><textarea id="infoText" rows="8">${a.info||""}</textarea><div style="margin-top:12px"><button class="btn" data-save-info="${id}">Guardar informação</button></div>`)}
+function saveInfo(id){const a=db.alunos.find(x=>x.id===id);a.info=document.getElementById("infoText").value;save();closeModal();go("alunos");toast("Informação guardada")}
+
+document.addEventListener("click",e=>{
+if(e.target.matches('[data-contact-lead]')){const l=db.leads.find(x=>x.id===+e.target.dataset.contactLead);if(l){if(l.email)db.outbox.push({canal:"EMAIL",destino:l.email,assunto:"Follow-up — Palco 21",corpo:`Olá ${l.nome||""}, vimos que mostrou interesse no ${l.instrumento||"Palco 21"}. Podemos ajudar a encontrar um horário.`}); if(l.telefone)db.outbox.push({canal:"SMS",destino:l.telefone,assunto:"Follow-up — Palco 21"}); l.contacted=true;save();renderEstatisticas();toast('Contacto preparado na fila');}}
+if(e.target.matches('[data-action="lead-stats"]'))go('estatisticas');
+const a=e.target.closest("[data-action]")?.dataset.action;if(a){
+ if(a==="add-student")studentModal();
+ if(a==="add-professor")professorModal();
+ if(a==="add-lesson")lessonModal();
+ if(a==="add-inscription")inscriptionModal();
+ if(a==="reset")resetDemo();
+ if(a==="test-email"){db.outbox.push({canal:"EMAIL",destino:"teste@palco21.pt",assunto:"Teste de email — Palco 21"});save();renderComunicacao();toast("Email colocado na fila")}
+ if(a==="test-sms"){db.outbox.push({canal:"SMS",destino:"+351912000000",assunto:"Teste de SMS — Palco 21"});save();renderComunicacao();toast("SMS colocado na fila")}
+ if(a==="send-reminders"){db.alunos.filter(x=>!x.pago).forEach(x=>{db.outbox.push({canal:"EMAIL",destino:x.email,assunto:"Lembrete de mensalidade — Palco 21"});db.outbox.push({canal:"SMS",destino:x.telefone,assunto:"Lembrete de mensalidade — Palco 21"})});save();renderComunicacao();toast("Lembretes colocados na fila")}
+ if(a==="portal")go("portal");
+ if(a==="show-students")go("alunos");
+}
+if(e.target.matches("[data-close]"))closeModal();
+if(e.target.matches("[data-info]"))editInfo(+e.target.dataset.info);
+if(e.target.matches("[data-save-info]"))saveInfo(+e.target.dataset.saveInfo);
+if(e.target.matches("[data-advance]")){const x=db.inscricoes.find(i=>i.id===+e.target.dataset.advance),flow=["Novo pedido","Contactado","Aula experimental","Inscrito","Inativo"],idx=flow.indexOf(x.estado);x.estado=flow[Math.min(idx+1,4)];save();renderInscricoes();toast("Inscrição atualizada")}
+if(e.target.matches("[data-reset-prof]"))professorModal(+e.target.dataset.resetProf);
+if(e.target.matches("[data-confirm]")){const x=db.aulas.find(a=>a.id===+e.target.dataset.confirm);x.confirmada=true;save();renderPortal();toast("Aula confirmada")}
+if(e.target.matches("[data-rebook]")){const x=db.aulas.find(a=>a.id===+e.target.dataset.rebook);const h=(new Date(x.data+"T"+x.hora)-new Date())/36e5;if(h<24){toast("A remarcação só está disponível até 24h antes.");return}x.remarcacao="pendente";save();renderPortal();toast("Pedido enviado ao professor")}
+if(e.target.matches("[data-approve]")){db.aulas.find(a=>a.id===+e.target.dataset.approve).remarcacao="aprovada";save();go("dashboard");toast("Remarcação aprovada")}
+if(e.target.matches("[data-reject]")){db.aulas.find(a=>a.id===+e.target.dataset.reject).remarcacao="recusada";save();go("dashboard");toast("Remarcação recusada")}
+});
+go("dashboard");
+</script>
+</body>
 </html>

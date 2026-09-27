@@ -2,7 +2,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {createClient} from '../lib/supabase/client';
-import {Agenda} from './Agenda';import {People} from './People';import {Reschedules} from './Reschedules';import {Finance} from './Finance';import {Leads} from './Leads';import {Notifications} from './Notifications';import {AdminUsers} from './AdminUsers';
+import {Agenda} from './Agenda';import {People} from './People';import {Reschedules} from './Reschedules';import {Finance} from './Finance';import {Leads} from './Leads';import {Notifications} from './Notifications';import {AdminUsers} from './AdminUsers'import {Relatorios} from './Relatorios';
 
 type Metric={label:string;value:string;hint:string;tone?:'normal'|'warn'|'ok'};
 type Lesson={id:string;starts_at:string;student_id:string;teacher_id:string;instrument?:{name:string}|null;student?:{full_name:string|null}|null;teacher?:{profile?:{full_name:string|null}|null}|null};

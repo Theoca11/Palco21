@@ -85,6 +85,7 @@ export function Agenda({ role }: { role: string }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showFullAgenda, setShowFullAgenda] = useState(false);
   const [seriesLesson, setSeriesLesson] = useState<Lesson | null>(null);
   const [seriesForm, setSeriesForm] = useState({ time: '17:00', repeatUntil: '' });
   const [form, setForm] = useState({
@@ -129,7 +130,13 @@ export function Agenda({ role }: { role: string }) {
         'id,student_id,teacher_id,instrument_id,series_id,starts_at,status,notes,student:students(profile:profiles(full_name),guardian_name),teacher:teachers(profile:profiles(full_name)),instrument:instruments(name),series:lesson_series(repeat_until,active,start_time)'
       )
       .gte('starts_at', monday.toISOString())
-      .lt('starts_at', sunday.toISOString())
+      .lt(
+        'starts_at',
+        (showFullAgenda
+          ? new Date(`${academicYearEnd(localDateValue(monday))}T23:59:59.999`)
+          : sunday
+        ).toISOString()
+      )
       .order('starts_at');
 
     if (error) {
@@ -236,7 +243,7 @@ export function Agenda({ role }: { role: string }) {
 
   useEffect(() => {
     load();
-  }, [week]);
+  }, [week, showFullAgenda]);
 
   function move(n: number) {
     setWeek(addDays(week, n * 7));
@@ -401,6 +408,32 @@ export function Agenda({ role }: { role: string }) {
       });
     } catch {}
 
+    await load();
+  }
+
+  async function cancelLesson(lesson: Lesson) {
+    if (lesson.status === 'cancelada') return;
+
+    const name = lesson.student?.profile?.full_name || 'esta aula';
+    const when = new Date(lesson.starts_at).toLocaleString('pt-PT');
+    const ok = window.confirm(`Cancelar a aula de ${name} em ${when}?`);
+
+    if (!ok) return;
+
+    setError('');
+    setSuccess('');
+
+    const { error } = await supabase
+      .from('lessons')
+      .update({ status: 'cancelada' })
+      .eq('id', lesson.id);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setSuccess('Aula cancelada.');
     await load();
   }
 
@@ -575,6 +608,26 @@ export function Agenda({ role }: { role: string }) {
     await load();
   }
 
+  const fullAgendaDays = useMemo(() => {
+    const groups: Record<string, Lesson[]> = {};
+
+    lessons.forEach(lesson => {
+      const d = new Date(lesson.starts_at);
+      const key = localDateValue(d);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(lesson);
+    });
+
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, dayLessons]) => ({
+        date,
+        lessons: dayLessons.sort(
+          (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
+        )
+      }));
+  }, [lessons]);
+
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 
   return (
@@ -597,6 +650,9 @@ export function Agenda({ role }: { role: string }) {
           <button className="btn ghost" onClick={() => move(-1)}>←</button>
           <button className="btn ghost" onClick={() => setWeek(startOfWeek(new Date()))}>Hoje</button>
           <button className="btn ghost" onClick={() => move(1)}>→</button>
+          <button className="btn ghost" onClick={() => setShowFullAgenda(!showFullAgenda)}>
+            {showFullAgenda ? 'Vista semanal' : 'Agenda completa'}
+          </button>
           {role !== 'aluno_encarregado' && (
             <button className="btn primary" onClick={openNew}>+ Nova aula</button>
           )}
@@ -606,47 +662,122 @@ export function Agenda({ role }: { role: string }) {
       {error && <div className="error">{error}</div>}
       {success && <div className="success">{success}</div>}
 
-      <div className="agendaGrid">
-        {days.map(d => (
-          <div className="dayCol" key={d.toISOString()}>
-            <div className="dayHead">
-              <strong>{new Intl.DateTimeFormat('pt-PT', { weekday: 'short' }).format(d)}</strong>
-              <span>{new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: '2-digit' }).format(d)}</span>
-            </div>
+      {showFullAgenda ? (
+        <div className="fullAgenda" style={{ display: 'grid', gap: 12 }}>
+          {fullAgendaDays.length === 0 && <div className="emptyDay">Sem aulas agendadas.</div>}
 
-            {weekLessons
-              .filter(l => {
+          {fullAgendaDays.map(day => (
+            <div className="sectionCard" key={day.date}>
+              <div className="dayHead" style={{ marginBottom: 8 }}>
+                <strong>
+                  {new Intl.DateTimeFormat('pt-PT', {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }).format(new Date(`${day.date}T12:00:00`))}
+                </strong>
+                <span>{day.lessons.length} {day.lessons.length === 1 ? 'aula' : 'aulas'}</span>
+              </div>
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                {day.lessons.map(l => (
+                  <div
+                    className="lessonCard"
+                    key={l.id}
+                    style={{ display: 'grid', gap: 3, opacity: l.status === 'cancelada' ? 0.55 : 1 }}
+                  >
+                    <b>{fmtTime(l.starts_at)}</b>
+                    <span>{l.student?.profile?.full_name || 'Aluno'}</span>
+                    <small>
+                      {l.instrument?.name || 'Instrumento'} · {l.teacher?.profile?.full_name || 'Professor'}
+                    </small>
+                    <em>{l.status}</em>
+
+                    {l.status !== 'cancelada' && role !== 'aluno_encarregado' && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        {l.series_id && l.series?.active && (
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            style={{ padding: '4px 8px', fontSize: 12 }}
+                            onClick={() => openSeriesManager(l)}
+                          >
+                            Série
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          style={{ padding: '4px 8px', fontSize: 12 }}
+                          onClick={() => cancelLesson(l)}
+                        >
+                          Cancelar aula
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="agendaGrid">
+          {days.map(d => (
+            <div className="dayCol" key={d.toISOString()}>
+              <div className="dayHead">
+                <strong>{new Intl.DateTimeFormat('pt-PT', { weekday: 'short' }).format(d)}</strong>
+                <span>{new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: '2-digit' }).format(d)}</span>
+              </div>
+
+              {weekLessons
+                .filter(l => {
+                  const x = new Date(l.starts_at);
+                  return x.getDate() === d.getDate() && x.getMonth() === d.getMonth();
+                })
+                .map(l => (
+                  <div className="lessonCard" key={l.id} style={{ opacity: l.status === 'cancelada' ? 0.55 : 1 }}>
+                    <b>{fmtTime(l.starts_at)}</b>
+                    <span>{l.student?.profile?.full_name || 'Aluno'}</span>
+                    <small>
+                      {l.instrument?.name || 'Instrumento'} · {l.teacher?.profile?.full_name || 'Professor'}
+                    </small>
+                    <em>{l.status}</em>
+
+                    {l.status !== 'cancelada' && role !== 'aluno_encarregado' && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        {l.series_id && l.series?.active && (
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            style={{ padding: '4px 8px', fontSize: 12 }}
+                            onClick={() => openSeriesManager(l)}
+                          >
+                            Série
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          style={{ padding: '4px 8px', fontSize: 12 }}
+                          onClick={() => cancelLesson(l)}
+                        >
+                          Cancelar aula
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+              {!weekLessons.some(l => {
                 const x = new Date(l.starts_at);
                 return x.getDate() === d.getDate() && x.getMonth() === d.getMonth();
-              })
-              .map(l => (
-                <div className="lessonCard" key={l.id}>
-                  <b>{fmtTime(l.starts_at)}</b>
-                  <span>{l.student?.profile?.full_name || 'Aluno'}</span>
-                  <small>
-                    {l.instrument?.name || 'Instrumento'} · {l.teacher?.profile?.full_name || 'Professor'}
-                  </small>
-                  <em>{l.status}</em>
-                  {l.series_id && l.series?.active && role !== 'aluno_encarregado' && (
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      style={{ marginTop: 6, padding: '4px 8px', fontSize: 12 }}
-                      onClick={() => openSeriesManager(l)}
-                    >
-                      Série
-                    </button>
-                  )}
-                </div>
-              ))}
-
-            {!weekLessons.some(l => {
-              const x = new Date(l.starts_at);
-              return x.getDate() === d.getDate() && x.getMonth() === d.getMonth();
-            }) && <div className="emptyDay">Sem aulas</div>}
-          </div>
-        ))}
-      </div>
+              }) && <div className="emptyDay">Sem aulas</div>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading && <div className="muted" style={{ marginTop: 12 }}>A carregar…</div>}
 

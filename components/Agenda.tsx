@@ -958,7 +958,7 @@ export function Agenda({ role }: { role: string }) {
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn primary" type="button" onClick={saveSeriesChanges}>Guardar alterações</button>
-            <button className="btn ghost" type="button" onClick={cancelSeries}>Cancelar série</button>
+            <button className="btn ghost" type="button" onClick={() => cancelSeries()}>Cancelar série</button>
           </div>
         </div>
       </div>
@@ -966,3 +966,4 @@ export function Agenda({ role }: { role: string }) {
     </section>
   );
 }
+

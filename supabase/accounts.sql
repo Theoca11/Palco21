@@ -1,0 +1,5 @@
+-- Palco 21 v9 — notas de contas reais.
+-- A criação de utilizadores é feita exclusivamente pelo endpoint server-side
+-- /api/admin/invite, usando SUPABASE_SERVICE_ROLE_KEY.
+-- Não exponhas esta chave no browser, .env.example ou GitHub.
+-- A tabela public.profiles é a fonte de verdade do papel do utilizador.

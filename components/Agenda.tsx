@@ -23,7 +23,14 @@ export function Agenda({role}:{role:string}){
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
   const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({student_id:'',teacher_id:'',instrument_id:'',starts_at:'',notes:''});
+  const [form,setForm]=useState({
+  student_id:'',
+  teacher_id:'',
+  instrument_id:'',
+  date:'',
+  time:'17:00',
+  notes:''
+});
 
   const monday=week;
   const sunday=addDays(monday,7);

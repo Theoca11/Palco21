@@ -79,6 +79,8 @@ export function Agenda({ role }: { role: string }) {
     instrument_id: '',
     date: '',
     time: '17:00',
+    repeatWeekly: false,
+    repeatUntil: '',
     notes: ''
   });
 
@@ -238,6 +240,8 @@ export function Agenda({ role }: { role: string }) {
       instrument_id: '',
       date: localDateValue(d),
       time: localTimeValue(d),
+      repeatWeekly: false,
+      repeatUntil: '',
       notes: ''
     });
 
@@ -261,27 +265,85 @@ export function Agenda({ role }: { role: string }) {
       return;
     }
 
-    const end = new Date(starts.getTime() + 50 * 60000);
+    const occurrences: Date[] = [starts];
 
-    const overlap = lessons.find(l => {
-      const a = new Date(l.starts_at);
-      const b = new Date(a.getTime() + 50 * 60000);
-      return starts < b && end > a;
-    });
+    if (form.repeatWeekly) {
+      if (!form.repeatUntil) {
+        setError('Indica a data até à qual queres repetir a aula.');
+        return;
+      }
 
-    if (overlap && role === 'administrador') {
-      setError('O administrador não pode criar aulas sobrepostas.');
-      return;
+      const until = localDateTimeToDate(form.repeatUntil, form.time);
+
+      if (Number.isNaN(until.getTime()) || until <= starts) {
+        setError('A data final da repetição tem de ser posterior à data da primeira aula.');
+        return;
+      }
+
+      let cursor = new Date(starts);
+
+      while (true) {
+        cursor = addDays(cursor, 7);
+
+        if (cursor > until) break;
+
+        occurrences.push(new Date(cursor));
+
+        if (occurrences.length > 105) {
+          setError('A repetição semanal não pode ultrapassar 104 semanas.');
+          return;
+        }
+      }
     }
 
-    const { error } = await supabase.from('lessons').insert({
+    const ends = occurrences.map(d => new Date(d.getTime() + 50 * 60000));
+
+    if (role === 'administrador') {
+      const rangeStart = occurrences[0].toISOString();
+      const rangeEnd = ends[ends.length - 1].toISOString();
+
+      const { data: existing, error: existingError } = await supabase
+        .from('lessons')
+        .select('starts_at')
+        .gte('starts_at', rangeStart)
+        .lt('starts_at', rangeEnd)
+        .order('starts_at');
+
+      if (existingError) {
+        setError(existingError.message);
+        return;
+      }
+
+      const existingLessons = existing || [];
+
+      for (const occurrence of occurrences) {
+        const occurrenceEnd = new Date(occurrence.getTime() + 50 * 60000);
+
+        const overlap = existingLessons.some((row: any) => {
+          const existingStart = new Date(row.starts_at);
+          const existingEnd = new Date(existingStart.getTime() + 50 * 60000);
+          return occurrence < existingEnd && occurrenceEnd > existingStart;
+        });
+
+        if (overlap) {
+          setError(
+            `Existe uma aula sobreposta em ${occurrence.toLocaleString('pt-PT')}. A série não foi criada.`
+          );
+          return;
+        }
+      }
+    }
+
+    const rows = occurrences.map(occurrence => ({
       student_id: form.student_id,
       teacher_id: form.teacher_id,
       instrument_id: form.instrument_id,
-      starts_at: starts.toISOString(),
+      starts_at: occurrence.toISOString(),
       duration_minutes: 50,
       notes: form.notes || null
-    });
+    }));
+
+    const { error } = await supabase.from('lessons').insert(rows);
 
     if (error) {
       setError(error.message);
@@ -289,7 +351,9 @@ export function Agenda({ role }: { role: string }) {
     }
 
     setShowAdd(false);
-    setSuccess('Aula criada.');
+
+    const count = rows.length;
+    setSuccess(count === 1 ? 'Aula criada.' : `${count} aulas semanais criadas.`);
 
     try {
       await fetch('/api/notifications/enqueue', {
@@ -300,8 +364,11 @@ export function Agenda({ role }: { role: string }) {
             {
               channel: 'email',
               recipient: 'admin@palco21.pt',
-              subject: 'Nova aula — Palco 21',
-              body: `Foi criada uma aula de 50 minutos para ${starts.toLocaleString('pt-PT')}.`,
+              subject: count === 1 ? 'Nova aula — Palco 21' : 'Aulas recorrentes — Palco 21',
+              body:
+                count === 1
+                  ? `Foi criada uma aula de 50 minutos para ${starts.toLocaleString('pt-PT')}.`
+                  : `Foram criadas ${count} aulas semanais de 50 minutos, a partir de ${starts.toLocaleString('pt-PT')}.`,
               event_type: 'lesson_created'
             }
           ]
@@ -443,6 +510,40 @@ export function Agenda({ role }: { role: string }) {
             </div>
 
             <div className="field">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.repeatWeekly}
+                  onChange={e =>
+                    setForm({
+                      ...form,
+                      repeatWeekly: e.target.checked,
+                      repeatUntil: e.target.checked
+                        ? form.repeatUntil || localDateValue(addDays(localDateTimeToDate(form.date, form.time), 4 * 7))
+                        : ''
+                    })
+                  }
+                />
+                Repetir semanalmente
+              </label>
+            </div>
+
+            {form.repeatWeekly && (
+              <div className="field">
+                <label>Repetir até</label>
+                <input
+                  type="date"
+                  value={form.repeatUntil}
+                  min={form.date}
+                  onChange={e => setForm({ ...form, repeatUntil: e.target.value })}
+                />
+                <small className="muted">
+                  A aula será criada no mesmo dia da semana e à mesma hora até esta data.
+                </small>
+              </div>
+            )}
+
+            <div className="field">
               <label>Notas</label>
               <textarea
                 rows={3}
@@ -451,7 +552,9 @@ export function Agenda({ role }: { role: string }) {
               />
             </div>
 
-            <button className="btn primary" type="submit">Criar aula</button>
+            <button className="btn primary" type="submit">
+              {form.repeatWeekly ? 'Criar aulas' : 'Criar aula'}
+            </button>
           </form>
         </div>
       )}

@@ -47,7 +47,15 @@ export function Agenda({role}:{role:string}){
       supabase.from('teachers').select('id,profile:profiles(full_name)').eq('active',true),
       supabase.from('instruments').select('id,name').order('name')
     ]);
-    const mapProfiles=(rows:any[])=>rows.map(x=>({id:x.id,name:x.profile?.full_name||'Sem nome'}));
+    const mapStudents=(rows:any[])=>rows.map(x=>({
+  id:x.id,
+  name:x.full_name || x.profile?.full_name || 'Sem nome'
+}));
+
+const mapTeachers=(rows:any[])=>rows.map(x=>({
+  id:x.id,
+  name:x.profile?.full_name || 'Sem nome'
+}));
     setStudents(mapProfiles(s.data||[]));setTeachers(mapProfiles(t.data||[]));setInstruments((i.data||[]) as Option[]);
     setLoading(false);
   }

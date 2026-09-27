@@ -21,7 +21,14 @@ export function People({role}:{role:string}){
   const ins=await supabase.from('instruments').select('id,name').order('name'); if(ins.error){setError(ins.error.message)}
   const si=await supabase.from('student_instruments').select('student_id,instrument_id');
   const map:Record<string,string[]>={}; (si.data||[]).forEach((x:any)=>(map[x.student_id] ||= []).push(x.instrument_id));
-  setStudents((ss.data||[]) as Student[]); setTeachers((ts.data||[]) as Teacher[]); setInstruments((ins.data||[]) as Instrument[]); setStudentInstruments(map); setLoading(false)
+  setStudents((ss.data || []) as Student[]);
+
+setTeachers((ts.data || []).map((row: any) => ({
+  ...row,
+  profile: Array.isArray(row.profile)
+    ? row.profile[0] ?? null
+    : row.profile,
+})) as Teacher[]); setInstruments((ins.data||[]) as Instrument[]); setStudentInstruments(map); setLoading(false)
  }
  useEffect(()=>{load()},[]);
  function toggleInstrument(id:string){setForm(f=>({...f,instrument_ids:f.instrument_ids.includes(id)?f.instrument_ids.filter(x=>x!==id):[...f.instrument_ids,id]}))}

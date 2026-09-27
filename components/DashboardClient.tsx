@@ -1,8 +1,23 @@
-'use client'
-import {useEffect,useMemo,useState} from 'react';
-import {useRouter} from 'next/navigation';
-import {createClient} from '../lib/supabase/client';
-import {Agenda} from './Agenda';import {People} from './People';import {Reschedules} from './Reschedules';import {Finance} from './Finance';import {Leads} from './Leads';import {Notifications} from './Notifications';import {AdminUsers} from './AdminUsers'import {Relatorios} from './Relatorios';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '../lib/supabase/client';
+import { Agenda } from './Agenda';
+import { People } from './People';
+import { Reschedules } from './Reschedules';
+import { Finance } from './Finance';
+import { Leads } from './Leads';
+import { Notifications } from './Notifications';
+import { AdminUsers } from './AdminUsers';
+import { Relatorios } from './Relatorios';
+
+type Metric = {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: 'normal' | 'warn' | 'ok';
+};
 
 type Metric={label:string;value:string;hint:string;tone?:'normal'|'warn'|'ok'};
 type Lesson={id:string;starts_at:string;student_id:string;teacher_id:string;instrument?:{name:string}|null;student?:{full_name:string|null}|null;teacher?:{profile?:{full_name:string|null}|null}|null};
@@ -23,5 +38,15 @@ export function DashboardClient({name,role}:{name:string,role:string}){
  <div className="metricGrid">{metrics.map(m=><div key={m.label} className={`card metric ${m.tone==='warn'?'metricWarn':m.tone==='ok'?'metricOk':''}`}><span className="muted">{m.label}</span><strong>{m.value}</strong><small className="muted">{m.hint}</small></div>)}</div>
  <section className="todayPanel"><div className="panelHead"><div><div className="eyebrow">Hoje</div><h2 style={{margin:'6px 0 2px'}}>Agenda do dia</h2><div className="muted">{loading?'A atualizar…':lessons.length?`${lessons.length} aula${lessons.length===1?'':'s'} marcada${lessons.length===1?'':'s'}.`:'Não tens aulas marcadas para hoje.'}</div></div><button className="btn primary" onClick={()=>document.getElementById('agenda-anchor')?.scrollIntoView({behavior:'smooth'})}>Abrir agenda</button></div>{loading?<div className="emptyCard">A carregar o resumo…</div>:lessons.length===0?<div className="emptyCard">Hoje está tranquilo. Nada pendente por aqui.</div>:<div className="todayList">{lessons.map(l=><div className="todayRow" key={l.id}><div className="todayTime">{fmtTime(l.starts_at)}</div><div><strong>{role==='professor'||role==='administrador'?l.student?.full_name||'Aluno':'Aula de '+(l.instrument?.name||'música')}</strong><div className="muted">{l.instrument?.name||'Instrumento'} · 50 min{role==='administrador'?` · ${l.teacher?.profile?.full_name||'Professor'}`:''}</div></div><div className="todayDate">{fmtDate(l.starts_at)}</div></div>)}</div>}</section>
  {role==='administrador'&&<section className="quickActions"><button className="quickCard" onClick={()=>document.getElementById('pessoas-anchor')?.scrollIntoView({behavior:'smooth'})}><span>+</span><div><strong>Novo aluno</strong><small>Adicionar ficha e instrumentos</small></div></button><button className="quickCard" onClick={()=>document.getElementById('agenda-anchor')?.scrollIntoView({behavior:'smooth'})}><span>＋</span><div><strong>Novo horário</strong><small>Marcar aula de 50 minutos</small></div></button><button className="quickCard" onClick={()=>document.getElementById('finance-anchor')?.scrollIntoView({behavior:'smooth'})}><span>€</span><div><strong>Financeiro</strong><small>{overdue} mensalidades pendentes</small></div></button><button className="quickCard" onClick={()=>document.getElementById('leads-anchor')?.scrollIntoView({behavior:'smooth'})}><span>↗</span><div><strong>Leads</strong><small>{newLeads} contactos para seguir</small></div></button></section>}
- <div id="agenda-anchor"><Agenda role={role}/></div><div id="pessoas-anchor"><People role={role}/></div><Reschedules role={role}/><div id="finance-anchor"><Finance role={role}/></div><div id="leads-anchor"><Leads role={role}/></div><Notifications role={role}/><AdminUsers role={role}/><section className="section"><div className="notice"><strong>{activeStudents?`${activeStudents} alunos ativos neste momento.`:'Base de produção ativa.'}</strong><br/>O dashboard junta agenda, remarcações, pagamentos e leads sem substituir as regras de acesso da base de dados.</div></section>
+<div id="agenda-anchor">
+  <Agenda role={role}/>
+</div>
+
+{role === 'administrador' && (
+  <Relatorios role={role}/>
+)}
+
+<div id="pessoas-anchor">
+  <People role={role}/>
+</div><People role={role}/></div><Reschedules role={role}/><div id="finance-anchor"><Finance role={role}/></div><div id="leads-anchor"><Leads role={role}/></div><Notifications role={role}/><AdminUsers role={role}/><section className="section"><div className="notice"><strong>{activeStudents?`${activeStudents} alunos ativos neste momento.`:'Base de produção ativa.'}</strong><br/>O dashboard junta agenda, remarcações, pagamentos e leads sem substituir as regras de acesso da base de dados.</div></section>
  </main>}

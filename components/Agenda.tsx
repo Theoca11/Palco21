@@ -56,7 +56,8 @@ const mapTeachers=(rows:any[])=>rows.map(x=>({
   id:x.id,
   name:x.profile?.full_name || 'Sem nome'
 }));
-    setStudents(mapProfiles(s.data||[]));setTeachers(mapProfiles(t.data||[]));setInstruments((i.data||[]) as Option[]);
+    setStudents(mapStudents(s.data || []));
+setTeachers(mapTeachers(t.data || []));setInstruments((i.data||[]) as Option[]);
     setLoading(false);
   }
   useEffect(()=>{load()},[week]);

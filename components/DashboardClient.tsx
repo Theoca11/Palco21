@@ -19,34 +19,603 @@ type Metric = {
   tone?: 'normal' | 'warn' | 'ok';
 };
 
-type Metric={label:string;value:string;hint:string;tone?:'normal'|'warn'|'ok'};
-type Lesson={id:string;starts_at:string;student_id:string;teacher_id:string;instrument?:{name:string}|null;student?:{full_name:string|null}|null;teacher?:{profile?:{full_name:string|null}|null}|null};
-const fmtTime=(s:string)=>new Intl.DateTimeFormat('pt-PT',{hour:'2-digit',minute:'2-digit'}).format(new Date(s));
-const fmtDate=(s:string)=>new Intl.DateTimeFormat('pt-PT',{day:'2-digit',month:'2-digit'}).format(new Date(s));
-function todayBounds(){const now=new Date();const start=new Date(now.getFullYear(),now.getMonth(),now.getDate());const end=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);return{start:start.toISOString(),end:end.toISOString()}}
-export function DashboardClient({name,role}:{name:string,role:string}){
- const router=useRouter();const supabase=createClient();const [lessons,setLessons]=useState<Lesson[]>([]),[pendingRebooks,setPendingRebooks]=useState(0),[overdue,setOverdue]=useState(0),[newLeads,setNewLeads]=useState(0),[activeStudents,setActiveStudents]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState('');
- async function logout(){await createClient().auth.signOut();router.push('/login')}
- async function loadSummary(){setLoading(true);setError('');const{start,end}=todayBounds();const qs:any[]=[supabase.from('lessons').select('id,starts_at,student_id,teacher_id,instrument:instruments(name),student:students(full_name),teacher:teachers(profile:profiles(full_name))').gte('starts_at',start).lt('starts_at',end).order('starts_at'),supabase.from('reschedule_requests').select('id,status').eq('status','pendente')];
- if(role==='administrador'){qs.push(supabase.from('monthly_payments').select('id,status').eq('status','pendente'));qs.push(supabase.from('leads').select('id,funnel_stage').in('funnel_stage',['visit','interest','form_started','form_contact']));qs.push(supabase.from('students').select('id').eq('status','ativo'))}else if(role==='aluno_encarregado'){qs.push(supabase.from('monthly_payments').select('id,status').eq('status','pendente'))}
- const rs=await Promise.all(qs),a=rs[0],r=rs[1];if(a.error)setError(a.error.message);else setLessons((a.data||[]) as Lesson[]);if(r.error)setError(x=>x||r.error.message);else setPendingRebooks(r.data?.length||0);
- if(role==='administrador'){const p=rs[2],l=rs[3],s=rs[4];setOverdue(p.error?0:p.data?.length||0);setNewLeads(l.error?0:l.data?.length||0);setActiveStudents(s.error?0:s.data?.length||0)}else if(role==='aluno_encarregado'){const p=rs[2];setOverdue(p.error?0:p.data?.length||0)}setLoading(false)}
- useEffect(()=>{loadSummary()},[role]);
- const labels:Record<string,string>={administrador:'Administrador',professor:'Professor',aluno_encarregado:'Aluno / Encarregado'};const heading=role==='administrador'?'Centro de controlo':role==='professor'?'O teu dia':'A tua área';const subtitle=role==='administrador'?'Tudo o que merece atenção hoje, num único ecrã.':role==='professor'?'Agenda e tarefas prioritárias para hoje.':'As tuas aulas e assuntos importantes.';
- const metrics=useMemo<Metric[]>(()=>{if(role==='administrador')return[{label:'Aulas hoje',value:String(lessons.length),hint:'Na escola hoje'},{label:'Remarcações',value:String(pendingRebooks),hint:'Pedidos pendentes',tone:pendingRebooks?'warn':'ok'},{label:'Pagamentos em falta',value:String(overdue),hint:'Mensalidades pendentes',tone:overdue?'warn':'ok'},{label:'Leads ativos',value:String(newLeads),hint:'Ainda por converter',tone:newLeads?'warn':'ok'}];if(role==='professor')return[{label:'Aulas hoje',value:String(lessons.length),hint:'A tua agenda'},{label:'Remarcações',value:String(pendingRebooks),hint:'À tua espera',tone:pendingRebooks?'warn':'ok'},{label:'Primeira aula',value:lessons[0]?fmtTime(lessons[0].starts_at):'—',hint:lessons[0]?`Aluno ${lessons[0].student?.full_name||''}`:'Sem aulas hoje'},{label:'Última aula',value:lessons.at(-1)?fmtTime(lessons.at(-1)!.starts_at):'—',hint:'Fim do dia'}];return[{label:'Aulas hoje',value:String(lessons.length),hint:'As tuas aulas'},{label:'Pagamento',value:overdue?'Em falta':'Regular',hint:overdue?'Há uma mensalidade pendente':'Sem pendências',tone:overdue?'warn':'ok'},{label:'Próxima aula',value:lessons[0]?fmtTime(lessons[0].starts_at):'—',hint:lessons[0]?.instrument?.name||'Sem aulas hoje'},{label:'Pedidos',value:String(pendingRebooks),hint:'Remarcações em análise'}]},[role,lessons,pendingRebooks,overdue,newLeads]);
- return <main className="dash"><div className="dashHead"><div><div className="eyebrow">PALCO 21 · {labels[role]||role}</div><h1 style={{margin:'6px 0'}}>{heading}</h1><div className="muted">{name} · {subtitle}</div></div><div style={{display:'flex',gap:8}}>{role==='administrador'&&<a className="btn ghost" href="/configuracao">Configuração</a>}<button className="btn ghost" onClick={logout}>Terminar sessão</button></div></div>{error&&<div className="error">{error}</div>}
- <div className="metricGrid">{metrics.map(m=><div key={m.label} className={`card metric ${m.tone==='warn'?'metricWarn':m.tone==='ok'?'metricOk':''}`}><span className="muted">{m.label}</span><strong>{m.value}</strong><small className="muted">{m.hint}</small></div>)}</div>
- <section className="todayPanel"><div className="panelHead"><div><div className="eyebrow">Hoje</div><h2 style={{margin:'6px 0 2px'}}>Agenda do dia</h2><div className="muted">{loading?'A atualizar…':lessons.length?`${lessons.length} aula${lessons.length===1?'':'s'} marcada${lessons.length===1?'':'s'}.`:'Não tens aulas marcadas para hoje.'}</div></div><button className="btn primary" onClick={()=>document.getElementById('agenda-anchor')?.scrollIntoView({behavior:'smooth'})}>Abrir agenda</button></div>{loading?<div className="emptyCard">A carregar o resumo…</div>:lessons.length===0?<div className="emptyCard">Hoje está tranquilo. Nada pendente por aqui.</div>:<div className="todayList">{lessons.map(l=><div className="todayRow" key={l.id}><div className="todayTime">{fmtTime(l.starts_at)}</div><div><strong>{role==='professor'||role==='administrador'?l.student?.full_name||'Aluno':'Aula de '+(l.instrument?.name||'música')}</strong><div className="muted">{l.instrument?.name||'Instrumento'} · 50 min{role==='administrador'?` · ${l.teacher?.profile?.full_name||'Professor'}`:''}</div></div><div className="todayDate">{fmtDate(l.starts_at)}</div></div>)}</div>}</section>
- {role==='administrador'&&<section className="quickActions"><button className="quickCard" onClick={()=>document.getElementById('pessoas-anchor')?.scrollIntoView({behavior:'smooth'})}><span>+</span><div><strong>Novo aluno</strong><small>Adicionar ficha e instrumentos</small></div></button><button className="quickCard" onClick={()=>document.getElementById('agenda-anchor')?.scrollIntoView({behavior:'smooth'})}><span>＋</span><div><strong>Novo horário</strong><small>Marcar aula de 50 minutos</small></div></button><button className="quickCard" onClick={()=>document.getElementById('finance-anchor')?.scrollIntoView({behavior:'smooth'})}><span>€</span><div><strong>Financeiro</strong><small>{overdue} mensalidades pendentes</small></div></button><button className="quickCard" onClick={()=>document.getElementById('leads-anchor')?.scrollIntoView({behavior:'smooth'})}><span>↗</span><div><strong>Leads</strong><small>{newLeads} contactos para seguir</small></div></button></section>}
-<div id="agenda-anchor">
-  <Agenda role={role}/>
-</div>
+type Lesson = {
+  id: string;
+  starts_at: string;
+  student_id: string;
+  teacher_id: string;
+  instrument?: { name: string } | null;
+  student?: { full_name: string | null } | null;
+  teacher?: { profile?: { full_name: string | null } | null } | null;
+};
 
-{role === 'administrador' && (
-  <Relatorios role={role}/>
-)}
+const fmtTime = (s: string) =>
+  new Intl.DateTimeFormat('pt-PT', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(s));
 
-<div id="pessoas-anchor">
-  <People role={role}/>
-</div><People role={role}/></div><Reschedules role={role}/><div id="finance-anchor"><Finance role={role}/></div><div id="leads-anchor"><Leads role={role}/></div><Notifications role={role}/><AdminUsers role={role}/><section className="section"><div className="notice"><strong>{activeStudents?`${activeStudents} alunos ativos neste momento.`:'Base de produção ativa.'}</strong><br/>O dashboard junta agenda, remarcações, pagamentos e leads sem substituir as regras de acesso da base de dados.</div></section>
- </main>}
+const fmtDate = (s: string) =>
+  new Intl.DateTimeFormat('pt-PT', {
+    day: '2-digit',
+    month: '2-digit'
+  }).format(new Date(s));
+
+function todayBounds() {
+  const now = new Date();
+  const start = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+  const end = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1
+  );
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString()
+  };
+}
+
+export function DashboardClient({
+  name,
+  role
+}: {
+  name: string;
+  role: string;
+}) {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [pendingRebooks, setPendingRebooks] = useState(0);
+  const [overdue, setOverdue] = useState(0);
+  const [newLeads, setNewLeads] = useState(0);
+  const [activeStudents, setActiveStudents] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function logout() {
+    await createClient().auth.signOut();
+    router.push('/login');
+  }
+
+  async function loadSummary() {
+    setLoading(true);
+    setError('');
+
+    const { start, end } = todayBounds();
+
+    const qs: any[] = [
+      supabase
+        .from('lessons')
+        .select(
+          'id,starts_at,student_id,teacher_id,instrument:instruments(name),student:students(full_name),teacher:teachers(profile:profiles(full_name))'
+        )
+        .gte('starts_at', start)
+        .lt('starts_at', end)
+        .order('starts_at'),
+
+      supabase
+        .from('reschedule_requests')
+        .select('id,status')
+        .eq('status', 'pendente')
+    ];
+
+    if (role === 'administrador') {
+      qs.push(
+        supabase
+          .from('monthly_payments')
+          .select('id,status')
+          .eq('status', 'pendente')
+      );
+
+      qs.push(
+        supabase
+          .from('leads')
+          .select('id,funnel_stage')
+          .in('funnel_stage', [
+            'visit',
+            'interest',
+            'form_started',
+            'form_contact'
+          ])
+      );
+
+      qs.push(
+        supabase
+          .from('students')
+          .select('id')
+          .eq('status', 'ativo')
+      );
+    } else if (role === 'aluno_encarregado') {
+      qs.push(
+        supabase
+          .from('monthly_payments')
+          .select('id,status')
+          .eq('status', 'pendente')
+      );
+    }
+
+    const rs = await Promise.all(qs);
+    const a = rs[0];
+    const r = rs[1];
+
+    if (a.error) {
+      setError(a.error.message);
+    } else {
+      setLessons((a.data || []) as Lesson[]);
+    }
+
+    if (r.error) {
+      setError(x => x || r.error.message);
+    } else {
+      setPendingRebooks(r.data?.length || 0);
+    }
+
+    if (role === 'administrador') {
+      const p = rs[2];
+      const l = rs[3];
+      const s = rs[4];
+
+      setOverdue(
+        p.error ? 0 : p.data?.length || 0
+      );
+
+      setNewLeads(
+        l.error ? 0 : l.data?.length || 0
+      );
+
+      setActiveStudents(
+        s.error ? 0 : s.data?.length || 0
+      );
+    } else if (role === 'aluno_encarregado') {
+      const p = rs[2];
+
+      setOverdue(
+        p.error ? 0 : p.data?.length || 0
+      );
+    }
+
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadSummary();
+  }, [role]);
+
+  const labels: Record<string, string> = {
+    administrador: 'Administrador',
+    professor: 'Professor',
+    aluno_encarregado: 'Aluno / Encarregado'
+  };
+
+  const heading =
+    role === 'administrador'
+      ? 'Centro de controlo'
+      : role === 'professor'
+        ? 'O teu dia'
+        : 'A tua área';
+
+  const subtitle =
+    role === 'administrador'
+      ? 'Tudo o que merece atenção hoje, num único ecrã.'
+      : role === 'professor'
+        ? 'Agenda e tarefas prioritárias para hoje.'
+        : 'As tuas aulas e assuntos importantes.';
+
+  const metrics = useMemo<Metric[]>(() => {
+    if (role === 'administrador') {
+      return [
+        {
+          label: 'Aulas hoje',
+          value: String(lessons.length),
+          hint: 'Na escola hoje'
+        },
+        {
+          label: 'Remarcações',
+          value: String(pendingRebooks),
+          hint: 'Pedidos pendentes',
+          tone: pendingRebooks ? 'warn' : 'ok'
+        },
+        {
+          label: 'Pagamentos em falta',
+          value: String(overdue),
+          hint: 'Mensalidades pendentes',
+          tone: overdue ? 'warn' : 'ok'
+        },
+        {
+          label: 'Leads ativos',
+          value: String(newLeads),
+          hint: 'Ainda por converter',
+          tone: newLeads ? 'warn' : 'ok'
+        }
+      ];
+    }
+
+    if (role === 'professor') {
+      return [
+        {
+          label: 'Aulas hoje',
+          value: String(lessons.length),
+          hint: 'A tua agenda'
+        },
+        {
+          label: 'Remarcações',
+          value: String(pendingRebooks),
+          hint: 'À tua espera',
+          tone: pendingRebooks ? 'warn' : 'ok'
+        },
+        {
+          label: 'Primeira aula',
+          value: lessons[0]
+            ? fmtTime(lessons[0].starts_at)
+            : '—',
+          hint: lessons[0]
+            ? `Aluno ${lessons[0].student?.full_name || ''}`
+            : 'Sem aulas hoje'
+        },
+        {
+          label: 'Última aula',
+          value: lessons.at(-1)
+            ? fmtTime(lessons.at(-1)!.starts_at)
+            : '—',
+          hint: 'Fim do dia'
+        }
+      ];
+    }
+
+    return [
+      {
+        label: 'Aulas hoje',
+        value: String(lessons.length),
+        hint: 'As tuas aulas'
+      },
+      {
+        label: 'Pagamento',
+        value: overdue ? 'Em falta' : 'Regular',
+        hint: overdue
+          ? 'Há uma mensalidade pendente'
+          : 'Sem pendências',
+        tone: overdue ? 'warn' : 'ok'
+      },
+      {
+        label: 'Próxima aula',
+        value: lessons[0]
+          ? fmtTime(lessons[0].starts_at)
+          : '—',
+        hint:
+          lessons[0]?.instrument?.name ||
+          'Sem aulas hoje'
+      },
+      {
+        label: 'Pedidos',
+        value: String(pendingRebooks),
+        hint: 'Remarcações em análise'
+      }
+    ];
+  }, [
+    role,
+    lessons,
+    pendingRebooks,
+    overdue,
+    newLeads
+  ]);
+
+  return (
+    <main className="dash">
+      <div className="dashHead">
+        <div>
+          <div className="eyebrow">
+            PALCO 21 · {labels[role] || role}
+          </div>
+
+          <h1 style={{ margin: '6px 0' }}>
+            {heading}
+          </h1>
+
+          <div className="muted">
+            {name} · {subtitle}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 8
+          }}
+        >
+          {role === 'administrador' && (
+            <a
+              className="btn ghost"
+              href="/configuracao"
+            >
+              Configuração
+            </a>
+          )}
+
+          <button
+            className="btn ghost"
+            onClick={logout}
+          >
+            Terminar sessão
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="error">
+          {error}
+        </div>
+      )}
+
+      <div className="metricGrid">
+        {metrics.map(m => (
+          <div
+            key={m.label}
+            className={`card metric ${
+              m.tone === 'warn'
+                ? 'metricWarn'
+                : m.tone === 'ok'
+                  ? 'metricOk'
+                  : ''
+            }`}
+          >
+            <span className="muted">
+              {m.label}
+            </span>
+
+            <strong>{m.value}</strong>
+
+            <small className="muted">
+              {m.hint}
+            </small>
+          </div>
+        ))}
+      </div>
+
+      <section className="todayPanel">
+        <div className="panelHead">
+          <div>
+            <div className="eyebrow">
+              Hoje
+            </div>
+
+            <h2
+              style={{
+                margin: '6px 0 2px'
+              }}
+            >
+              Agenda do dia
+            </h2>
+
+            <div className="muted">
+              {loading
+                ? 'A atualizar…'
+                : lessons.length
+                  ? `${lessons.length} aula${
+                      lessons.length === 1
+                        ? ''
+                        : 's'
+                    } marcada${
+                      lessons.length === 1
+                        ? ''
+                        : 's'
+                    }.`
+                  : 'Não tens aulas marcadas para hoje.'}
+            </div>
+          </div>
+
+          <button
+            className="btn primary"
+            onClick={() =>
+              document
+                .getElementById(
+                  'agenda-anchor'
+                )
+                ?.scrollIntoView({
+                  behavior: 'smooth'
+                })
+            }
+          >
+            Abrir agenda
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="emptyCard">
+            A carregar o resumo…
+          </div>
+        ) : lessons.length === 0 ? (
+          <div className="emptyCard">
+            Hoje está tranquilo. Nada pendente
+            por aqui.
+          </div>
+        ) : (
+          <div className="todayList">
+            {lessons.map(l => (
+              <div
+                className="todayRow"
+                key={l.id}
+              >
+                <div className="todayTime">
+                  {fmtTime(l.starts_at)}
+                </div>
+
+                <div>
+                  <strong>
+                    {role === 'professor' ||
+                    role === 'administrador'
+                      ? l.student
+                          ?.full_name ||
+                        'Aluno'
+                      : `Aula de ${
+                          l.instrument?.name ||
+                          'música'
+                        }`}
+                  </strong>
+
+                  <div className="muted">
+                    {l.instrument?.name ||
+                      'Instrumento'}{' '}
+                    · 50 min
+                    {role ===
+                    'administrador'
+                      ? ` · ${
+                          l.teacher?.profile
+                            ?.full_name ||
+                          'Professor'
+                        }`
+                      : ''}
+                  </div>
+                </div>
+
+                <div className="todayDate">
+                  {fmtDate(l.starts_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {role === 'administrador' && (
+        <section className="quickActions">
+          <button
+            className="quickCard"
+            onClick={() =>
+              document
+                .getElementById(
+                  'pessoas-anchor'
+                )
+                ?.scrollIntoView({
+                  behavior: 'smooth'
+                })
+            }
+          >
+            <span>+</span>
+
+            <div>
+              <strong>Novo aluno</strong>
+              <small>
+                Adicionar ficha e instrumentos
+              </small>
+            </div>
+          </button>
+
+          <button
+            className="quickCard"
+            onClick={() =>
+              document
+                .getElementById(
+                  'agenda-anchor'
+                )
+                ?.scrollIntoView({
+                  behavior: 'smooth'
+                })
+            }
+          >
+            <span>＋</span>
+
+            <div>
+              <strong>Novo horário</strong>
+              <small>
+                Marcar aula de 50 minutos
+              </small>
+            </div>
+          </button>
+
+          <button
+            className="quickCard"
+            onClick={() =>
+              document
+                .getElementById(
+                  'finance-anchor'
+                )
+                ?.scrollIntoView({
+                  behavior: 'smooth'
+                })
+            }
+          >
+            <span>€</span>
+
+            <div>
+              <strong>Financeiro</strong>
+              <small>
+                {overdue} mensalidades pendentes
+              </small>
+            </div>
+          </button>
+
+          <button
+            className="quickCard"
+            onClick={() =>
+              document
+                .getElementById(
+                  'leads-anchor'
+                )
+                ?.scrollIntoView({
+                  behavior: 'smooth'
+                })
+            }
+          >
+            <span>↗</span>
+
+            <div>
+              <strong>Leads</strong>
+              <small>
+                {newLeads} contactos para seguir
+              </small>
+            </div>
+          </button>
+        </section>
+      )}
+
+      <div id="agenda-anchor">
+        <Agenda role={role} />
+      </div>
+
+      {role === 'administrador' && (
+        <Relatorios role={role} />
+      )}
+
+      <div id="pessoas-anchor">
+        <People role={role} />
+      </div>
+
+      <Reschedules role={role} />
+
+      <div id="finance-anchor">
+        <Finance role={role} />
+      </div>
+
+      <div id="leads-anchor">
+        <Leads role={role} />
+      </div>
+
+      <Notifications role={role} />
+
+      <AdminUsers role={role} />
+
+      <section className="section">
+        <div className="notice">
+          <strong>
+            {activeStudents
+              ? `${activeStudents} alunos ativos neste momento.`
+              : 'Base de produção ativa.'}
+          </strong>
+
+          <br />
+
+          O dashboard junta agenda,
+          remarcações, pagamentos e leads sem
+          substituir as regras de acesso da base
+          de dados.
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -425,7 +425,7 @@ export function Agenda({ role }: { role: string }) {
 
     const { error } = await supabase
       .from('lessons')
-      .update({ status: 'cancelada' })
+      .delete()
       .eq('id', lesson.id);
 
     if (error) {
@@ -433,7 +433,7 @@ export function Agenda({ role }: { role: string }) {
       return;
     }
 
-    setSuccess('Aula cancelada.');
+    setSuccess('Aula cancelada e removida da agenda.');
     await load();
   }
 
@@ -535,7 +535,7 @@ export function Agenda({ role }: { role: string }) {
       for (const row of extra) {
         const { error } = await supabase
           .from('lessons')
-          .update({ status: 'cancelada' })
+          .delete()
           .eq('id', row.id);
         if (error) {
           setError(error.message);
@@ -591,7 +591,7 @@ export function Agenda({ role }: { role: string }) {
 
     const { error: lessonsError } = await supabase
       .from('lessons')
-      .update({ status: 'cancelada' })
+      .delete()
       .eq('series_id', target.series_id)
       .gte('starts_at', new Date().toISOString());
 
@@ -966,4 +966,3 @@ export function Agenda({ role }: { role: string }) {
     </section>
   );
 }
-

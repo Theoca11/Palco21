@@ -577,15 +577,22 @@ export function Agenda({ role }: { role: string }) {
     await load();
   }
 
-  async function cancelSeries() {
-    if (!seriesLesson?.series_id) return;
+  async function cancelSeries(targetLesson?: Lesson) {
+    const target = targetLesson || seriesLesson;
+    if (!target?.series_id) return;
+
+    const ok = window.confirm(
+      'Cancelar esta série a partir de hoje? As aulas futuras serão canceladas e as aulas já realizadas ficam intactas.'
+    );
+    if (!ok) return;
+
     setError('');
     setSuccess('');
 
     const { error: lessonsError } = await supabase
       .from('lessons')
       .update({ status: 'cancelada' })
-      .eq('series_id', seriesLesson.series_id)
+      .eq('series_id', target.series_id)
       .gte('starts_at', new Date().toISOString());
 
     if (lessonsError) {
@@ -596,7 +603,7 @@ export function Agenda({ role }: { role: string }) {
     const { error: seriesError } = await supabase
       .from('lesson_series')
       .update({ active: false })
-      .eq('id', seriesLesson.series_id);
+      .eq('id', target.series_id);
 
     if (seriesError) {
       setError(seriesError.message);
@@ -697,14 +704,24 @@ export function Agenda({ role }: { role: string }) {
                     {l.status !== 'cancelada' && role !== 'aluno_encarregado' && (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                         {l.series_id && l.series?.active && (
-                          <button
-                            type="button"
-                            className="btn ghost"
-                            style={{ padding: '4px 8px', fontSize: 12 }}
-                            onClick={() => openSeriesManager(l)}
-                          >
-                            Série
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              style={{ padding: '4px 8px', fontSize: 12 }}
+                              onClick={() => openSeriesManager(l)}
+                            >
+                              Gerir série
+                            </button>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              style={{ padding: '4px 8px', fontSize: 12 }}
+                              onClick={() => cancelSeries(l)}
+                            >
+                              Cancelar série
+                            </button>
+                          </>
                         )}
                         <button
                           type="button"
@@ -748,14 +765,24 @@ export function Agenda({ role }: { role: string }) {
                     {l.status !== 'cancelada' && role !== 'aluno_encarregado' && (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                         {l.series_id && l.series?.active && (
-                          <button
-                            type="button"
-                            className="btn ghost"
-                            style={{ padding: '4px 8px', fontSize: 12 }}
-                            onClick={() => openSeriesManager(l)}
-                          >
-                            Série
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              style={{ padding: '4px 8px', fontSize: 12 }}
+                              onClick={() => openSeriesManager(l)}
+                            >
+                              Gerir série
+                            </button>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              style={{ padding: '4px 8px', fontSize: 12 }}
+                              onClick={() => cancelSeries(l)}
+                            >
+                              Cancelar série
+                            </button>
+                          </>
                         )}
                         <button
                           type="button"

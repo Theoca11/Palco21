@@ -36,7 +36,12 @@ export function Agenda({role}:{role:string}){
     let q=supabase.from('lessons').select('id,student_id,teacher_id,instrument_id,starts_at,status,notes,student:students(profile:profiles(full_name),guardian_name),teacher:teachers(profile:profiles(full_name)),instrument:instruments(name)').gte('starts_at',monday.toISOString()).lt('starts_at',sunday.toISOString()).order('starts_at');
     const {data,error}=await q;
     if(error){setError(error.message);setLoading(false);return}
-    setLessons((data||[]) as Lesson[]);
+   setLessons((data || []).map((row: any) => ({
+  ...row,
+  student: Array.isArray(row.student) ? row.student[0] ?? null : row.student,
+  teacher: Array.isArray(row.teacher) ? row.teacher[0] ?? null : row.teacher,
+  instrument: Array.isArray(row.instrument) ? row.instrument[0] ?? null : row.instrument,
+})) as Lesson[]);
     const [s,t,i]=await Promise.all([
       supabase.from('students').select('id,profile:profiles(full_name)').eq('status','ativo').order('id'),
       supabase.from('teachers').select('id,profile:profiles(full_name)').eq('active',true),

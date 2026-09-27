@@ -7,7 +7,12 @@ const stages=['visit','interest','form_started','completed','contacted','enrolle
 const labels:Record<string,string>={visit:'Visita',interest:'Interesse',form_started:'Formulário iniciado',completed:'Inscrição recebida',contacted:'Contactado',enrolled:'Inscrito',lost:'Perdido'}
 export function Leads({role}:{role:string}){
  const admin=role==='administrador'; const supabase=createClient(); const [leads,setLeads]=useState<Lead[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState('');
- async function load(){setLoading(true);const {data,error}=await supabase.from('leads').select('id,name,email,phone,preferred_contact,source,campaign,funnel_stage,consent_at,created_at,instrument:instruments(name)').order('created_at',{ascending:false});if(error)setError(error.message);else setLeads((data||[]) as Lead[]);setLoading(false)}
+ async function load(){setLoading(true);const {data,error}=await supabase.from('leads').select('id,name,email,phone,preferred_contact,source,campaign,funnel_stage,consent_at,created_at,instrument:instruments(name)').order('created_at',{ascending:false});if(error)setError(error.message);else setLeads((data || []).map((row: any) => ({
+  ...row,
+  instrument: Array.isArray(row.instrument)
+    ? row.instrument[0] ?? null
+    : row.instrument,
+})) as Lead[]);setLoading(false)}
  useEffect(()=>{if(admin)load(); else setLoading(false)},[admin]);
  const stats=useMemo(()=>Object.fromEntries(stages.map(s=>[s,leads.filter(l=>l.funnel_stage===s).length])),[leads]);
  async function updateStage(id:string,stage:string){const {error}=await supabase.from('leads').update({funnel_stage:stage}).eq('id',id);if(error)setError(error.message);else load()}

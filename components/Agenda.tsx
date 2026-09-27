@@ -8,12 +8,14 @@ type Lesson = {
   student_id: string;
   teacher_id: string;
   instrument_id: string;
+  series_id: string | null;
   starts_at: string;
   status: string;
   notes: string | null;
   student?: { profile?: { full_name: string } | null; guardian_name?: string | null } | null;
   teacher?: { profile?: { full_name: string } | null } | null;
   instrument?: { name: string } | null;
+  series?: { repeat_until: string; active: boolean; start_time: string | null } | null;
 };
 
 type Option = { id: string; name: string };
@@ -62,6 +64,16 @@ function localDateTimeToDate(date: string, time: string) {
   return new Date(`${date}T${time}:00`);
 }
 
+function academicYearEnd(dateText: string) {
+  const d = new Date(`${dateText}T12:00:00`);
+  const year = d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
+  return `${year}-07-31`;
+}
+
+function formatDateTimeForInput(d: Date) {
+  return `${localDateValue(d)} ${localTimeValue(d)}`;
+}
+
 export function Agenda({ role }: { role: string }) {
   const supabase = createClient();
   const [week, setWeek] = useState(startOfWeek(new Date()));
@@ -73,6 +85,8 @@ export function Agenda({ role }: { role: string }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [seriesLesson, setSeriesLesson] = useState<Lesson | null>(null);
+  const [seriesForm, setSeriesForm] = useState({ time: '17:00', repeatUntil: '' });
   const [form, setForm] = useState({
     student_id: '',
     teacher_id: '',
@@ -112,7 +126,7 @@ export function Agenda({ role }: { role: string }) {
     const { data, error } = await supabase
       .from('lessons')
       .select(
-        'id,student_id,teacher_id,instrument_id,starts_at,status,notes,student:students(profile:profiles(full_name),guardian_name),teacher:teachers(profile:profiles(full_name)),instrument:instruments(name)'
+        'id,student_id,teacher_id,instrument_id,series_id,starts_at,status,notes,student:students(profile:profiles(full_name),guardian_name),teacher:teachers(profile:profiles(full_name)),instrument:instruments(name),series:lesson_series(repeat_until,active,start_time)'
       )
       .gte('starts_at', monday.toISOString())
       .lt('starts_at', sunday.toISOString())
@@ -129,7 +143,8 @@ export function Agenda({ role }: { role: string }) {
         ...row,
         student: Array.isArray(row.student) ? row.student[0] ?? null : row.student,
         teacher: Array.isArray(row.teacher) ? row.teacher[0] ?? null : row.teacher,
-        instrument: Array.isArray(row.instrument) ? row.instrument[0] ?? null : row.instrument
+        instrument: Array.isArray(row.instrument) ? row.instrument[0] ?? null : row.instrument,
+        series: Array.isArray(row.series) ? row.series[0] ?? null : row.series
       })) as Lesson[]
     );
 
@@ -241,7 +256,7 @@ export function Agenda({ role }: { role: string }) {
       date: localDateValue(d),
       time: localTimeValue(d),
       repeatWeekly: false,
-      repeatUntil: '',
+      repeatUntil: academicYearEnd(localDateValue(d)),
       notes: ''
     });
 
@@ -269,75 +284,85 @@ export function Agenda({ role }: { role: string }) {
 
     if (form.repeatWeekly) {
       if (!form.repeatUntil) {
-        setError('Indica a data até à qual queres repetir a aula.');
+        setError('Indica até quando queres repetir a aula.');
         return;
       }
-
       const until = localDateTimeToDate(form.repeatUntil, form.time);
-
-      if (Number.isNaN(until.getTime()) || until <= starts) {
-        setError('A data final da repetição tem de ser posterior à data da primeira aula.');
+      if (Number.isNaN(until.getTime()) || until < starts) {
+        setError('A data final da repetição tem de ser igual ou posterior à primeira aula.');
         return;
       }
-
       let cursor = new Date(starts);
-
       while (true) {
         cursor = addDays(cursor, 7);
-
         if (cursor > until) break;
-
         occurrences.push(new Date(cursor));
-
-        if (occurrences.length > 105) {
-          setError('A repetição semanal não pode ultrapassar 104 semanas.');
+        if (occurrences.length > 60) {
+          setError('A série excede o limite de 60 ocorrências.');
           return;
         }
       }
     }
 
-    const ends = occurrences.map(d => new Date(d.getTime() + 50 * 60000));
-
+    // Pre-check conflicts against currently loaded week, plus DB conflicts for recurring series.
     if (role === 'administrador') {
-      const rangeStart = occurrences[0].toISOString();
-      const rangeEnd = ends[ends.length - 1].toISOString();
-
+      const first = occurrences[0];
+      const last = occurrences[occurrences.length - 1];
       const { data: existing, error: existingError } = await supabase
         .from('lessons')
-        .select('starts_at')
-        .gte('starts_at', rangeStart)
-        .lt('starts_at', rangeEnd)
-        .order('starts_at');
+        .select('id,starts_at,teacher_id')
+        .gte('starts_at', first.toISOString())
+        .lt('starts_at', new Date(last.getTime() + 50 * 60000).toISOString());
 
       if (existingError) {
         setError(existingError.message);
         return;
       }
 
-      const existingLessons = existing || [];
-
       for (const occurrence of occurrences) {
-        const occurrenceEnd = new Date(occurrence.getTime() + 50 * 60000);
-
-        const overlap = existingLessons.some((row: any) => {
-          const existingStart = new Date(row.starts_at);
-          const existingEnd = new Date(existingStart.getTime() + 50 * 60000);
-          return occurrence < existingEnd && occurrenceEnd > existingStart;
+        const end = new Date(occurrence.getTime() + 50 * 60000);
+        const overlap = (existing || []).some((row: any) => {
+          const a = new Date(row.starts_at);
+          const b = new Date(a.getTime() + 50 * 60000);
+          return occurrence < b && end > a;
         });
-
         if (overlap) {
-          setError(
-            `Existe uma aula sobreposta em ${occurrence.toLocaleString('pt-PT')}. A série não foi criada.`
-          );
+          setError(`Existe uma aula sobreposta em ${occurrence.toLocaleString('pt-PT')}. A série não foi criada.`);
           return;
         }
       }
+    }
+
+    let seriesId: string | null = null;
+
+    if (form.repeatWeekly) {
+      const { data: series, error: seriesError } = await supabase
+        .from('lesson_series')
+        .insert({
+          student_id: form.student_id,
+          teacher_id: form.teacher_id,
+          instrument_id: form.instrument_id,
+          first_starts_at: starts.toISOString(),
+          start_time: form.time,
+          weekday: starts.getDay() === 0 ? 7 : starts.getDay(),
+          repeat_until: form.repeatUntil,
+          active: true
+        })
+        .select('id')
+        .single();
+
+      if (seriesError || !series) {
+        setError(seriesError?.message || 'Não foi possível criar a série.');
+        return;
+      }
+      seriesId = series.id;
     }
 
     const rows = occurrences.map(occurrence => ({
       student_id: form.student_id,
       teacher_id: form.teacher_id,
       instrument_id: form.instrument_id,
+      series_id: seriesId,
       starts_at: occurrence.toISOString(),
       duration_minutes: 50,
       notes: form.notes || null
@@ -346,36 +371,207 @@ export function Agenda({ role }: { role: string }) {
     const { error } = await supabase.from('lessons').insert(rows);
 
     if (error) {
+      if (seriesId) await supabase.from('lesson_series').delete().eq('id', seriesId);
       setError(error.message);
       return;
     }
 
     setShowAdd(false);
-
-    const count = rows.length;
-    setSuccess(count === 1 ? 'Aula criada.' : `${count} aulas semanais criadas.`);
+    setSuccess(
+      rows.length === 1
+        ? 'Aula criada.'
+        : `${rows.length} aulas semanais criadas, até ${form.repeatUntil}.`
+    );
 
     try {
       await fetch('/api/notifications/enqueue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: [
-            {
-              channel: 'email',
-              recipient: 'admin@palco21.pt',
-              subject: count === 1 ? 'Nova aula — Palco 21' : 'Aulas recorrentes — Palco 21',
-              body:
-                count === 1
-                  ? `Foi criada uma aula de 50 minutos para ${starts.toLocaleString('pt-PT')}.`
-                  : `Foram criadas ${count} aulas semanais de 50 minutos, a partir de ${starts.toLocaleString('pt-PT')}.`,
-              event_type: 'lesson_created'
-            }
-          ]
+          items: [{
+            channel: 'email',
+            recipient: 'admin@palco21.pt',
+            subject: rows.length === 1 ? 'Nova aula — Palco 21' : 'Série semanal — Palco 21',
+            body: rows.length === 1
+              ? `Foi criada uma aula de 50 minutos para ${starts.toLocaleString('pt-PT')}.`
+              : `Foi criada uma série semanal de ${rows.length} aulas, a partir de ${starts.toLocaleString('pt-PT')}.`,
+            event_type: 'lesson_created'
+          }]
         })
       });
     } catch {}
 
+    await load();
+  }
+
+  function openSeriesManager(lesson: Lesson) {
+    if (!lesson.series_id || !lesson.series) return;
+    const d = new Date(lesson.starts_at);
+    setSeriesLesson(lesson);
+    setSeriesForm({
+      time: localTimeValue(d),
+      repeatUntil: lesson.series.repeat_until
+    });
+    setError('');
+    setSuccess('');
+  }
+
+  async function saveSeriesChanges() {
+    if (!seriesLesson?.series_id || !seriesLesson.series) return;
+    setError('');
+    setSuccess('');
+
+    const current = new Date(seriesLesson.starts_at);
+    const newTime = seriesForm.time;
+    const until = localDateTimeToDate(seriesForm.repeatUntil, newTime);
+
+    if (Number.isNaN(until.getTime()) || until < current) {
+      setError('A data final da série é inválida.');
+      return;
+    }
+
+    const { data: futureLessons, error: futureError } = await supabase
+      .from('lessons')
+      .select('id,starts_at,status')
+      .eq('series_id', seriesLesson.series_id)
+      .gte('starts_at', current.toISOString())
+      .order('starts_at');
+
+    if (futureError) {
+      setError(futureError.message);
+      return;
+    }
+
+    const future = futureLessons || [];
+    const newDates: Date[] = [];
+    let cursor = new Date(current);
+    while (cursor <= until) {
+      const next = localDateTimeToDate(localDateValue(cursor), newTime);
+      if (next >= current) newDates.push(next);
+      cursor = addDays(cursor, 7);
+      if (newDates.length > 60) {
+        setError('A série excede o limite de 60 ocorrências.');
+        return;
+      }
+    }
+
+    // Check other lessons before applying the change.
+    if (role === 'administrador') {
+      const { data: others, error: othersError } = await supabase
+        .from('lessons')
+        .select('id,starts_at')
+        .neq('series_id', seriesLesson.series_id)
+        .gte('starts_at', current.toISOString())
+        .lt('starts_at', new Date(until.getTime() + 50 * 60000).toISOString());
+      if (othersError) {
+        setError(othersError.message);
+        return;
+      }
+      for (const d of newDates) {
+        const end = new Date(d.getTime() + 50 * 60000);
+        const conflict = (others || []).some((row: any) => {
+          const a = new Date(row.starts_at);
+          const b = new Date(a.getTime() + 50 * 60000);
+          return d < b && end > a;
+        });
+        if (conflict) {
+          setError(`Existe conflito em ${d.toLocaleString('pt-PT')}. A série não foi alterada.`);
+          return;
+        }
+      }
+    }
+
+    // Update current/future lessons that remain in the series.
+    const agendadas = future.filter((x: any) => x.status === 'agendada');
+    const keep = Math.min(agendadas.length, newDates.length);
+
+    for (let i = 0; i < keep; i++) {
+      const { error } = await supabase
+        .from('lessons')
+        .update({ starts_at: newDates[i].toISOString() })
+        .eq('id', agendadas[i].id);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    }
+
+    // Cancel extra old occurrences if the new end date is shorter.
+    if (agendadas.length > newDates.length) {
+      const extra = agendadas.slice(newDates.length);
+      for (const row of extra) {
+        const { error } = await supabase
+          .from('lessons')
+          .update({ status: 'cancelada' })
+          .eq('id', row.id);
+        if (error) {
+          setError(error.message);
+          return;
+        }
+      }
+    }
+
+    // Create extra occurrences if the new end date is longer.
+    if (newDates.length > agendadas.length) {
+      const rows = newDates.slice(agendadas.length).map(d => ({
+        student_id: seriesLesson.student_id,
+        teacher_id: seriesLesson.teacher_id,
+        instrument_id: seriesLesson.instrument_id,
+        series_id: seriesLesson.series_id,
+        starts_at: d.toISOString(),
+        duration_minutes: 50,
+        notes: seriesLesson.notes || null
+      }));
+      const { error } = await supabase.from('lessons').insert(rows);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    }
+
+    const { error: seriesError } = await supabase
+      .from('lesson_series')
+      .update({ repeat_until: seriesForm.repeatUntil, start_time: newTime, active: true })
+      .eq('id', seriesLesson.series_id);
+
+    if (seriesError) {
+      setError(seriesError.message);
+      return;
+    }
+
+    setSeriesLesson(null);
+    setSuccess('Série atualizada.');
+    await load();
+  }
+
+  async function cancelSeries() {
+    if (!seriesLesson?.series_id) return;
+    setError('');
+    setSuccess('');
+
+    const { error: lessonsError } = await supabase
+      .from('lessons')
+      .update({ status: 'cancelada' })
+      .eq('series_id', seriesLesson.series_id)
+      .gte('starts_at', new Date().toISOString());
+
+    if (lessonsError) {
+      setError(lessonsError.message);
+      return;
+    }
+
+    const { error: seriesError } = await supabase
+      .from('lesson_series')
+      .update({ active: false })
+      .eq('id', seriesLesson.series_id);
+
+    if (seriesError) {
+      setError(seriesError.message);
+      return;
+    }
+
+    setSeriesLesson(null);
+    setSuccess('Série cancelada a partir de agora.');
     await load();
   }
 
@@ -431,6 +627,16 @@ export function Agenda({ role }: { role: string }) {
                     {l.instrument?.name || 'Instrumento'} · {l.teacher?.profile?.full_name || 'Professor'}
                   </small>
                   <em>{l.status}</em>
+                  {l.series_id && l.series?.active && role !== 'aluno_encarregado' && (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      style={{ marginTop: 6, padding: '4px 8px', fontSize: 12 }}
+                      onClick={() => openSeriesManager(l)}
+                    >
+                      Série
+                    </button>
+                  )}
                 </div>
               ))}
 
@@ -519,12 +725,12 @@ export function Agenda({ role }: { role: string }) {
                       ...form,
                       repeatWeekly: e.target.checked,
                       repeatUntil: e.target.checked
-                        ? form.repeatUntil || localDateValue(addDays(localDateTimeToDate(form.date, form.time), 4 * 7))
-                        : ''
+                        ? form.repeatUntil || academicYearEnd(form.date)
+                        : form.repeatUntil
                     })
                   }
                 />
-                Repetir semanalmente
+                Repetir semanalmente até julho
               </label>
             </div>
 
@@ -538,7 +744,7 @@ export function Agenda({ role }: { role: string }) {
                   onChange={e => setForm({ ...form, repeatUntil: e.target.value })}
                 />
                 <small className="muted">
-                  A aula será criada no mesmo dia da semana e à mesma hora até esta data.
+                  Por defeito, fica até 31 de julho do ano letivo. Tu ou o professor podem alterar ou cancelar a série mais tarde.
                 </small>
               </div>
             )}
@@ -552,12 +758,53 @@ export function Agenda({ role }: { role: string }) {
               />
             </div>
 
-            <button className="btn primary" type="submit">
-              {form.repeatWeekly ? 'Criar aulas' : 'Criar aula'}
-            </button>
+            <button className="btn primary" type="submit">{form.repeatWeekly ? 'Criar série' : 'Criar aula'}</button>
           </form>
         </div>
       )}
+
+    {seriesLesson && (
+      <div className="modalBackdrop">
+        <div className="modalCard">
+          <div className="dashHead">
+            <div>
+              <div className="eyebrow">Série semanal</div>
+              <h3 style={{ margin: '6px 0' }}>Gerir aulas seguintes</h3>
+            </div>
+            <button type="button" className="btn ghost" onClick={() => setSeriesLesson(null)}>Fechar</button>
+          </div>
+
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Altera a hora ou prolonga/encurta a série. O passado mantém-se intacto.
+          </div>
+
+          <div className="field">
+            <label>Hora semanal</label>
+            <input
+              type="time"
+              value={seriesForm.time}
+              onChange={e => setSeriesForm({ ...seriesForm, time: e.target.value })}
+              step={300}
+            />
+          </div>
+
+          <div className="field">
+            <label>Repetir até</label>
+            <input
+              type="date"
+              value={seriesForm.repeatUntil}
+              min={localDateValue(new Date(seriesLesson.starts_at))}
+              onChange={e => setSeriesForm({ ...seriesForm, repeatUntil: e.target.value })}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn primary" type="button" onClick={saveSeriesChanges}>Guardar alterações</button>
+            <button className="btn ghost" type="button" onClick={cancelSeries}>Cancelar série</button>
+          </div>
+        </div>
+      </div>
+    )}
     </section>
   );
 }

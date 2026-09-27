@@ -42,22 +42,80 @@ export function Agenda({role}:{role:string}){
   teacher: Array.isArray(row.teacher) ? row.teacher[0] ?? null : row.teacher,
   instrument: Array.isArray(row.instrument) ? row.instrument[0] ?? null : row.instrument,
 })) as Lesson[]);
-    const [s,t,i]=await Promise.all([
-      supabase.from('students').select('id,profile:profiles(full_name)').eq('status','ativo').order('id'),
-      supabase.from('teachers').select('id,profile:profiles(full_name)').eq('active',true),
-      supabase.from('instruments').select('id,name').order('name')
-    ]);
-    const mapStudents=(rows:any[])=>rows.map(x=>({
-  id:x.id,
-  name:x.full_name || x.profile?.full_name || 'Sem nome'
-}));
+    const [s, t, i] = await Promise.all([
+  supabase
+    .from('students')
+    .select('id,full_name,profile_id')
+    .eq('status', 'ativo')
+    .order('full_name'),
 
-const mapTeachers=(rows:any[])=>rows.map(x=>({
-  id:x.id,
-  name:x.profile?.full_name || 'Sem nome'
-}));
-    setStudents(mapStudents(s.data || []));
-setTeachers(mapTeachers(t.data || []));setInstruments((i.data||[]) as Option[]);
+  supabase
+    .from('teachers')
+    .select('id,profile_id,specialty,active')
+    .eq('active', true),
+
+  supabase
+    .from('instruments')
+    .select('id,name')
+    .order('name')
+]);
+
+if (s.error) {
+  setError(`Alunos: ${s.error.message}`);
+  setLoading(false);
+  return;
+}
+
+if (t.error) {
+  setError(`Professores: ${t.error.message}`);
+  setLoading(false);
+  return;
+}
+
+if (i.error) {
+  setError(`Instrumentos: ${i.error.message}`);
+  setLoading(false);
+  return;
+}
+
+const teacherProfileIds = (t.data || [])
+  .map((x: any) => x.profile_id)
+  .filter(Boolean);
+
+let teacherProfiles: Record<string, string> = {};
+
+if (teacherProfileIds.length) {
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id,full_name')
+    .in('id', teacherProfileIds);
+
+  if (profilesError) {
+    setError(`Professores: ${profilesError.message}`);
+    setLoading(false);
+    return;
+  }
+
+  teacherProfiles = Object.fromEntries(
+    (profiles || []).map((p: any) => [p.id, p.full_name])
+  );
+}
+
+setStudents(
+  (s.data || []).map((x: any) => ({
+    id: x.id,
+    name: x.full_name || 'Sem nome'
+  }))
+);
+
+setTeachers(
+  (t.data || []).map((x: any) => ({
+    id: x.id,
+    name: teacherProfiles[x.profile_id] || 'Sem nome'
+  }))
+);
+
+setInstruments((i.data || []) as Option[]);
     setLoading(false);
   }
   useEffect(()=>{load()},[week]);

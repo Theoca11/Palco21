@@ -42,6 +42,9 @@ export function SignupForm() {
       contact_name:
         String(form.get('name') || '').trim() || null,
 
+      request_type:
+        String(form.get('request_type') || 'informacao'),
+
       email:
         String(form.get('email') || '').trim() || null,
 
@@ -96,7 +99,7 @@ export function SignupForm() {
         setStatus(
           `Erro ${response.status}: ${
             result?.error ||
-            'Não foi possível enviar a inscrição.'
+            'Não foi possível enviar o pedido.'
           }`
         )
         return
@@ -104,24 +107,22 @@ export function SignupForm() {
 
       if (result?.notification_error) {
         setStatus(
-          `Inscrição recebida. ${
+          `Pedido recebido. ${
             result.notification_error
           }`
         )
       } else {
         setStatus(
-          'Recebido. Entramos em contacto consigo brevemente.'
+          'Pedido recebido. Entramos em contacto consigo brevemente.'
         )
       }
 
-      // Capturámos o elemento antes do await,
-      // porque currentTarget pode ficar null depois de uma operação assíncrona.
       formElement.reset()
     } catch (errorValue: any) {
       setStatus(
         `Erro de ligação ao servidor: ${
           errorValue?.message ||
-          'não foi possível enviar a inscrição.'
+          'não foi possível enviar o pedido.'
         }`
       )
     } finally {
@@ -135,21 +136,43 @@ export function SignupForm() {
       onSubmit={submit}
     >
       <div className="eyebrow">
-        Inscrição
+        Contacto
       </div>
 
       <h2>
-        Quero inscrever-me
+        Queres saber mais?
       </h2>
 
       <p className="muted">
-        Deixa os teus dados e escolhe o instrumento
-        em que tens interesse. A escola entra
-        depois em contacto.
+        Podes pedir informações sobre as aulas
+        ou indicar que queres avançar com a inscrição.
+        A escola entra depois em contacto.
       </p>
 
       <div className="field">
-        <label>Nome</label>
+        <label>
+          O que pretendes?
+        </label>
+
+        <select
+          name="request_type"
+          defaultValue="informacao"
+        >
+          <option value="informacao">
+            Quero apenas informações
+          </option>
+
+          <option value="inscricao">
+            Quero inscrever-me
+          </option>
+        </select>
+      </div>
+
+      <div className="field">
+        <label>
+          Nome
+        </label>
+
         <input
           name="name"
           autoComplete="name"
@@ -181,7 +204,9 @@ export function SignupForm() {
       </div>
 
       <div className="field">
-        <label>Email</label>
+        <label>
+          Email
+        </label>
 
         <input
           name="email"
@@ -191,7 +216,9 @@ export function SignupForm() {
       </div>
 
       <div className="field">
-        <label>Telemóvel</label>
+        <label>
+          Telemóvel
+        </label>
 
         <input
           name="phone"
@@ -212,9 +239,17 @@ export function SignupForm() {
             Escolher…
           </option>
 
-          <option>Chamada</option>
-          <option>Email</option>
-          <option>WhatsApp</option>
+          <option>
+            Chamada
+          </option>
+
+          <option>
+            Email
+          </option>
+
+          <option>
+            WhatsApp
+          </option>
         </select>
       </div>
 
@@ -234,7 +269,7 @@ export function SignupForm() {
         />
 
         Aceito que a Palco 21 utilize os meus
-        dados para responder ao pedido de inscrição.
+        dados para responder ao meu pedido.
       </label>
 
       {status && (
@@ -255,9 +290,7 @@ export function SignupForm() {
       >
         {loading
           ? 'A ENVIAR…'
-          : 'ENVIAR INSCRIÇÃO →'}
+          : 'ENVIAR PEDIDO →'}
       </button>
     </form>
   )
-}
-

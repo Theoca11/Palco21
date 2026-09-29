@@ -31,10 +31,12 @@ export function SignupForm() {
   ) {
     e.preventDefault()
 
+    const formElement = e.currentTarget
+
     setStatus('')
     setLoading(true)
 
-    const form = new FormData(e.currentTarget)
+    const form = new FormData(formElement)
 
     const payload = {
       contact_name:
@@ -84,7 +86,9 @@ export function SignupForm() {
         result = raw ? JSON.parse(raw) : {}
       } catch {
         result = {
-          error: raw || 'A resposta do servidor não é válida.'
+          error:
+            raw ||
+            'A resposta do servidor não é válida.'
         }
       }
 
@@ -110,7 +114,9 @@ export function SignupForm() {
         )
       }
 
-      e.currentTarget.reset()
+      // Capturámos o elemento antes do await,
+      // porque currentTarget pode ficar null depois de uma operação assíncrona.
+      formElement.reset()
     } catch (errorValue: any) {
       setStatus(
         `Erro de ligação ao servidor: ${
@@ -124,10 +130,17 @@ export function SignupForm() {
   }
 
   return (
-    <form className="form" onSubmit={submit}>
-      <div className="eyebrow">Inscrição</div>
+    <form
+      className="form"
+      onSubmit={submit}
+    >
+      <div className="eyebrow">
+        Inscrição
+      </div>
 
-      <h2>Quero inscrever-me</h2>
+      <h2>
+        Quero inscrever-me
+      </h2>
 
       <p className="muted">
         Deixa os teus dados e escolhe o instrumento
@@ -137,17 +150,24 @@ export function SignupForm() {
 
       <div className="field">
         <label>Nome</label>
-        <input name="name" autoComplete="name" />
+        <input
+          name="name"
+          autoComplete="name"
+        />
       </div>
 
       <div className="field">
-        <label>Instrumento de interesse</label>
+        <label>
+          Instrumento de interesse
+        </label>
 
         <select
           name="interest_instrument_id"
           defaultValue=""
         >
-          <option value="">Escolher…</option>
+          <option value="">
+            Escolher…
+          </option>
 
           {instruments.map(instrument => (
             <option
@@ -162,6 +182,7 @@ export function SignupForm() {
 
       <div className="field">
         <label>Email</label>
+
         <input
           name="email"
           type="email"
@@ -171,6 +192,7 @@ export function SignupForm() {
 
       <div className="field">
         <label>Telemóvel</label>
+
         <input
           name="phone"
           autoComplete="tel"
@@ -178,13 +200,18 @@ export function SignupForm() {
       </div>
 
       <div className="field">
-        <label>Preferes contacto por</label>
+        <label>
+          Preferes contacto por
+        </label>
 
         <select
           name="preferred_contact"
           defaultValue=""
         >
-          <option value="">Escolher…</option>
+          <option value="">
+            Escolher…
+          </option>
+
           <option>Chamada</option>
           <option>Email</option>
           <option>WhatsApp</option>

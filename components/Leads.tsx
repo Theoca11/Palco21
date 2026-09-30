@@ -15,6 +15,7 @@ type Lead = {
   funnel_stage: string
   consent_at: string | null
   created_at: string
+  archived?: boolean
   instrument?: {
     name: string | null
   } | null
@@ -47,11 +48,17 @@ export function Leads({ role }: { role: string }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showArchive, setShowArchive] = useState(false)
 
   async function load() {
     setLoading(true)
     setError('')
 
+    /*
+     * Tentamos usar archived.
+     * Se a coluna ainda não existir, mostramos a mensagem
+     * para executar o pequeno SQL que forneço abaixo.
+     */
     const { data, error } = await supabase
       .from('leads')
       .select(`
@@ -66,6 +73,7 @@ export function Leads({ role }: { role: string }) {
         funnel_stage,
         consent_at,
         created_at,
+        archived,
         instrument:instruments(name)
       `)
       .order('created_at', {
@@ -74,20 +82,23 @@ export function Leads({ role }: { role: string }) {
 
     if (error) {
       setError(error.message)
-    } else {
-      setLeads(
-        (data || []).map((row: any) => ({
-          ...row,
-          request_type:
-            row.request_type === 'inscricao'
-              ? 'inscricao'
-              : 'informacao',
-          instrument: Array.isArray(row.instrument)
-            ? row.instrument[0] ?? null
-            : row.instrument
-        })) as Lead[]
-      )
+      setLoading(false)
+      return
     }
+
+    setLeads(
+      (data || []).map((row: any) => ({
+        ...row,
+        archived: Boolean(row.archived),
+        request_type:
+          row.request_type === 'inscricao'
+            ? 'inscricao'
+            : 'informacao',
+        instrument: Array.isArray(row.instrument)
+          ? row.instrument[0] ?? null
+          : row.instrument
+      })) as Lead[]
+    )
 
     setLoading(false)
   }
@@ -100,26 +111,51 @@ export function Leads({ role }: { role: string }) {
     }
   }, [admin])
 
+  const visibleLeads = useMemo(
+    () =>
+      leads.filter(
+        lead =>
+          Boolean(lead.archived) ===
+          showArchive
+      ),
+    [leads, showArchive]
+  )
+
+  const activeLeads = leads.filter(
+    lead => !lead.archived
+  )
+
+  const archivedLeads = leads.filter(
+    lead => lead.archived
+  )
+
   const stats = useMemo(
     () => ({
-      informacoes: leads.filter(
+      informacoes: activeLeads.filter(
         lead =>
-          lead.request_type === 'informacao'
+          lead.request_type ===
+          'informacao'
       ).length,
-      inscricoes: leads.filter(
+
+      inscricoes: activeLeads.filter(
         lead =>
-          lead.request_type === 'inscricao'
+          lead.request_type ===
+          'inscricao'
       ).length,
-      contactados: leads.filter(
+
+      contactados: activeLeads.filter(
         lead =>
-          lead.funnel_stage === 'contacted'
+          lead.funnel_stage ===
+          'contacted'
       ).length,
-      inscritos: leads.filter(
+
+      inscritos: activeLeads.filter(
         lead =>
-          lead.funnel_stage === 'enrolled'
+          lead.funnel_stage ===
+          'enrolled'
       ).length
     }),
-    [leads]
+    [activeLeads]
   )
 
   async function updateStage(
@@ -135,9 +171,81 @@ export function Leads({ role }: { role: string }) {
 
     if (error) {
       setError(error.message)
-    } else {
-      load()
+      return
     }
+
+    load()
+  }
+
+  async function archiveLead(lead: Lead) {
+    const name =
+      lead.name || 'este pedido'
+
+    const confirmed = window.confirm(
+      `Arquivar ${name}? O pedido desaparece da lista principal, mas pode ser recuperado.`
+    )
+
+    if (!confirmed) return
+
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        archived: true
+      })
+      .eq('id', lead.id)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    load()
+  }
+
+  async function restoreLead(lead: Lead) {
+    const name =
+      lead.name || 'este pedido'
+
+    const confirmed = window.confirm(
+      `Recuperar ${name}?`
+    )
+
+    if (!confirmed) return
+
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        archived: false
+      })
+      .eq('id', lead.id)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    load()
+  }
+
+  /*
+   * Caso tenhas transformado um lead em aluno,
+   * arquiva o pedido para deixar de ocupar espaço.
+   */
+  async function markAsHandled(lead: Lead) {
+    const { error } = await supabase
+      .from('leads')
+      .update({
+        funnel_stage: 'enrolled',
+        archived: true
+      })
+      .eq('id', lead.id)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    load()
   }
 
   if (!admin) {
@@ -161,8 +269,7 @@ export function Leads({ role }: { role: string }) {
           </h2>
 
           <div className="muted">
-            Distingue pedidos de informação de pedidos
-            de inscrição e acompanha cada contacto.
+            Pedidos de informação e de inscrição.
           </div>
         </div>
 
@@ -174,43 +281,79 @@ export function Leads({ role }: { role: string }) {
         </button>
       </div>
 
-      <div className="leadStats">
-        <div className="card stat">
-          <span className="muted">
-            Pedidos de informação
+      <div className="tabs">
+        <button
+          className={
+            !showArchive
+              ? 'tab active'
+              : 'tab'
+          }
+          onClick={() =>
+            setShowArchive(false)
+          }
+        >
+          Ativos{' '}
+          <span>
+            {activeLeads.length}
           </span>
-          <strong>
-            {stats.informacoes}
-          </strong>
-        </div>
+        </button>
 
-        <div className="card stat">
-          <span className="muted">
-            Pedidos de inscrição
+        <button
+          className={
+            showArchive
+              ? 'tab active'
+              : 'tab'
+          }
+          onClick={() =>
+            setShowArchive(true)
+          }
+        >
+          Arquivo{' '}
+          <span>
+            {archivedLeads.length}
           </span>
-          <strong>
-            {stats.inscricoes}
-          </strong>
-        </div>
-
-        <div className="card stat">
-          <span className="muted">
-            Contactados
-          </span>
-          <strong>
-            {stats.contactados}
-          </strong>
-        </div>
-
-        <div className="card stat">
-          <span className="muted">
-            Inscritos
-          </span>
-          <strong>
-            {stats.inscritos}
-          </strong>
-        </div>
+        </button>
       </div>
+
+      {!showArchive && (
+        <div className="leadStats">
+          <div className="card stat">
+            <span className="muted">
+              Pedidos de informação
+            </span>
+            <strong>
+              {stats.informacoes}
+            </strong>
+          </div>
+
+          <div className="card stat">
+            <span className="muted">
+              Pedidos de inscrição
+            </span>
+            <strong>
+              {stats.inscricoes}
+            </strong>
+          </div>
+
+          <div className="card stat">
+            <span className="muted">
+              Contactados
+            </span>
+            <strong>
+              {stats.contactados}
+            </strong>
+          </div>
+
+          <div className="card stat">
+            <span className="muted">
+              Inscritos
+            </span>
+            <strong>
+              {stats.inscritos}
+            </strong>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="error">
@@ -229,85 +372,135 @@ export function Leads({ role }: { role: string }) {
             <span>Tipo</span>
             <span>Instrumento</span>
             <span>Estado</span>
-            <span>Data</span>
+            <span>Ações</span>
           </div>
 
-          {leads.map(lead => (
-            <div
-              className="leadRow"
-              key={lead.id}
-            >
-              <span>
-                <strong>
-                  {lead.name || 'Sem nome'}
-                </strong>
-
-                <small>
-                  {lead.email ||
-                    lead.phone ||
-                    'Sem contacto'}
-
-                  {lead.preferred_contact
-                    ? ` · ${lead.preferred_contact}`
-                    : ''}
-                </small>
-              </span>
-
-              <span>
-                {lead.request_type === 'inscricao' ? (
+          {visibleLeads.map(
+            lead => (
+              <div
+                className="leadRow"
+                key={lead.id}
+              >
+                <span>
                   <strong>
-                    Inscrição
+                    {lead.name ||
+                      'Sem nome'}
                   </strong>
-                ) : (
+
+                  <small>
+                    {lead.email ||
+                      lead.phone ||
+                      'Sem contacto'}
+
+                    {lead.preferred_contact
+                      ? ` · ${lead.preferred_contact}`
+                      : ''}
+                  </small>
+                </span>
+
+                <span>
                   <strong>
-                    Informação
+                    {lead.request_type ===
+                    'inscricao'
+                      ? 'Inscrição'
+                      : 'Informação'}
                   </strong>
-                )}
 
-                <small>
-                  {lead.source || 'site'}
-                  {lead.campaign
-                    ? ` · ${lead.campaign}`
-                    : ''}
-                </small>
-              </span>
+                  <small>
+                    {lead.source ||
+                      'site'}
 
-              <span>
-                {lead.instrument?.name || '—'}
-              </span>
+                    {lead.campaign
+                      ? ` · ${lead.campaign}`
+                      : ''}
+                  </small>
+                </span>
 
-              <span>
-                <select
-                  value={lead.funnel_stage}
-                  onChange={e =>
-                    updateStage(
-                      lead.id,
-                      e.target.value
-                    )
-                  }
+                <span>
+                  {lead.instrument?.name ||
+                    '—'}
+                </span>
+
+                <span>
+                  <select
+                    value={
+                      lead.funnel_stage
+                    }
+                    onChange={e =>
+                      updateStage(
+                        lead.id,
+                        e.target.value
+                      )
+                    }
+                  >
+                    {stages.map(
+                      stage => (
+                        <option
+                          key={stage}
+                          value={stage}
+                        >
+                          {labels[stage]}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </span>
+
+                <span
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    flexWrap: 'wrap'
+                  }}
                 >
-                  {stages.map(stage => (
-                    <option
-                      key={stage}
-                      value={stage}
+                  {!lead.archived &&
+                    lead.funnel_stage !==
+                      'enrolled' && (
+                      <button
+                        className="btn ghost"
+                        onClick={() =>
+                          markAsHandled(
+                            lead
+                          )
+                        }
+                      >
+                        Passou a aluno
+                      </button>
+                    )}
+
+                  {lead.archived ? (
+                    <button
+                      className="btn ghost"
+                      onClick={() =>
+                        restoreLead(
+                          lead
+                        )
+                      }
                     >
-                      {labels[stage]}
-                    </option>
-                  ))}
-                </select>
-              </span>
+                      Recuperar
+                    </button>
+                  ) : (
+                    <button
+                      className="btn ghost"
+                      onClick={() =>
+                        archiveLead(
+                          lead
+                        )
+                      }
+                    >
+                      Arquivar
+                    </button>
+                  )}
+                </span>
+              </div>
+            )
+          )}
 
-              <span>
-                {new Date(
-                  lead.created_at
-                ).toLocaleDateString('pt-PT')}
-              </span>
-            </div>
-          ))}
-
-          {leads.length === 0 && (
+          {visibleLeads.length === 0 && (
             <div className="emptyCard">
-              Ainda não existem pedidos.
+              {showArchive
+                ? 'O arquivo está vazio.'
+                : 'Não existem pedidos ativos.'}
             </div>
           )}
         </div>

@@ -523,6 +523,59 @@ export function People({ role }: { role: string }) {
     load();
   }
 
+
+  async function deletePerson(
+    type: 'student' | 'teacher',
+    id: string,
+    name: string
+  ) {
+    if (!admin) return;
+
+    const confirmed = window.confirm(
+      `ATENÇÃO!\n\nEliminar definitivamente ${name}?\n\n` +
+        `Esta ação irá apagar a pessoa, a conta de acesso, ` +
+        `as aulas associadas e os pedidos de remarcação.\n\n` +
+        `A pessoa NÃO ficará no arquivo e esta ação não pode ser desfeita.\n\nContinuar?`
+    );
+
+    if (!confirmed) return;
+
+    setError('');
+    setOk('');
+
+    try {
+      const response = await fetch('/api/admin/delete-person', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type, id }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(
+          result?.error ||
+            'Não foi possível eliminar a pessoa.'
+        );
+        return;
+      }
+
+      setOk(
+        result?.message ||
+          `${name} foi eliminado definitivamente.`
+      );
+
+      await load();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Erro de ligação ao servidor ao eliminar a pessoa.'
+      );
+    }
+  }
+
   const instrumentName = useMemo(
     () =>
       Object.fromEntries(
@@ -779,14 +832,33 @@ export function People({ role }: { role: string }) {
 
                   ) : (
 
-                    <button
-                      className="btn ghost"
-                      onClick={() =>
-                        archiveStudent(s)
-                      }
-                    >
-                      Arquivar
-                    </button>
+                    <>
+                      <button
+                        className="btn ghost"
+                        onClick={() =>
+                          archiveStudent(s)
+                        }
+                      >
+                        Arquivar
+                      </button>
+
+                      <button
+                        className="btn ghost"
+                        style={{
+                          color: '#dc2626',
+                          borderColor: '#dc2626',
+                        }}
+                        onClick={() =>
+                          deletePerson(
+                            'student',
+                            s.id,
+                            s.full_name || 'este aluno'
+                          )
+                        }
+                      >
+                        Eliminar definitivamente
+                      </button>
+                    </>
 
                   )}
 
@@ -917,6 +989,24 @@ export function People({ role }: { role: string }) {
                         }
                       >
                         Arquivar
+                      </button>
+
+                      <button
+                        className="btn ghost"
+                        style={{
+                          color: '#dc2626',
+                          borderColor: '#dc2626',
+                        }}
+                        onClick={() =>
+                          deletePerson(
+                            'teacher',
+                            teacher.id,
+                            teacher.profile?.full_name ||
+                              'este professor'
+                          )
+                        }
+                      >
+                        Eliminar definitivamente
                       </button>
                     </>
 

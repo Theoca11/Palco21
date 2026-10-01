@@ -397,7 +397,7 @@ export function Reschedules({ role }: { role: string }) {
               descontado nenhum valor na mensalidade
               nos seguintes casos: feriados nacionais,
               feriados municipais, Carnaval e nos dias
-              24 de Dezembro e 31 de Janeiro.
+              24 de Dezembro e 31 de Dezembro.
             </p>
 
             <p className="muted">

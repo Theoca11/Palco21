@@ -1,102 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '../../../lib/supabase/server'
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
+  /*
+   * IMPORTANTE:
+   *
+   * O Supabase pode devolver a sessão no fragmento do URL:
+   *
+   * #access_token=...
+   *
+   * O fragmento nunca é enviado para o servidor.
+   *
+   * Por isso encaminhamos para uma página Client Component,
+   * que consegue ler/processar a sessão no browser.
+   */
 
-  const code =
-    req.nextUrl.searchParams.get('code')
+  const url = new URL(
+    '/auth/confirm-client',
+    req.url
+  )
 
-  const tokenHash =
-    req.nextUrl.searchParams.get('token_hash')
-
-  const type =
-    req.nextUrl.searchParams.get('type')
-
-  try {
-    /*
-     * Fluxo PKCE / code
-     */
-    if (code) {
-      const { error } =
-        await supabase.auth.exchangeCodeForSession(
-          code
-        )
-
-      if (error) {
-        console.error(
-          'Erro ao trocar code por sessão:',
-          error
-        )
-
-        return NextResponse.redirect(
-          new URL(
-            '/login?error=convite_invalido',
-            req.url
-          )
-        )
-      }
-
-      return NextResponse.redirect(
-        new URL(
-          '/definir-password',
-          req.url
-        )
-      )
+  // Preservar parâmetros ?code=, ?token_hash=, ?type=, etc.
+  req.nextUrl.searchParams.forEach(
+    (value, key) => {
+      url.searchParams.set(key, value)
     }
+  )
 
-    /*
-     * Fluxo de convite por token_hash
-     */
-    if (tokenHash && type) {
-      const { error } =
-        await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: type as any,
-        })
-
-      if (error) {
-        console.error(
-          'Erro ao validar convite:',
-          error
-        )
-
-        return NextResponse.redirect(
-          new URL(
-            '/login?error=convite_invalido',
-            req.url
-          )
-        )
-      }
-
-      return NextResponse.redirect(
-        new URL(
-          '/definir-password',
-          req.url
-        )
-      )
-    }
-
-    /*
-     * Link sem parâmetros válidos
-     */
-    return NextResponse.redirect(
-      new URL(
-        '/login?error=link_invalido',
-        req.url
-      )
-    )
-  } catch (error) {
-    console.error(
-      'Erro na confirmação do convite:',
-      error
-    )
-
-    return NextResponse.redirect(
-      new URL(
-        '/login?error=erro_confirmacao',
-        req.url
-      )
-    )
-  }
+  return NextResponse.redirect(url)
 }

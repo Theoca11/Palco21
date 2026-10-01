@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '../../../../lib/supabase/server'
+import { createClient } from '../../../lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-type Role = 'administrador' | 'professor' | 'aluno_encarregado'
+type Role =
+  | 'administrador'
+  | 'professor'
+  | 'aluno_encarregado'
 
 const getAdmin = () =>
   createAdminClient(
@@ -33,13 +36,17 @@ export async function POST(request: Request) {
     }
 
     // Confirmar que o utilizador é administrador
-    const { data: me, error: meError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const { data: me, error: meError } =
+      await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
 
-    if (meError || me?.role !== 'administrador') {
+    if (
+      meError ||
+      me?.role !== 'administrador'
+    ) {
       return NextResponse.json(
         { error: 'Sem permissão.' },
         { status: 403 }
@@ -58,13 +65,17 @@ export async function POST(request: Request) {
     }
 
     // Ler dados do formulário
-    const body = await request.json().catch(() => null)
+    const body = await request
+      .json()
+      .catch(() => null)
 
     const email = String(body?.email || '')
       .trim()
       .toLowerCase()
 
-    const fullName = String(body?.fullName || '').trim()
+    const fullName = String(
+      body?.fullName || ''
+    ).trim()
 
     const phone =
       String(body?.phone || '').trim() || null
@@ -93,7 +104,6 @@ export async function POST(request: Request) {
     const admin = getAdmin()
 
     /*
-     * IMPORTANTE:
      * O convite vai sempre para o domínio online.
      * Não usamos localhost.
      */
@@ -102,13 +112,16 @@ export async function POST(request: Request) {
 
     // Criar utilizador e enviar email de convite
     const { data, error } =
-      await admin.auth.admin.inviteUserByEmail(email, {
-        data: {
-          full_name: fullName,
-          invited_role: role,
-        },
-        redirectTo,
-      })
+      await admin.auth.admin.inviteUserByEmail(
+        email,
+        {
+          data: {
+            full_name: fullName,
+            invited_role: role,
+          },
+          redirectTo,
+        }
+      )
 
     if (error || !data.user) {
       return NextResponse.json(
@@ -134,7 +147,9 @@ export async function POST(request: Request) {
       })
 
     if (profileError) {
-      await admin.auth.admin.deleteUser(userId)
+      await admin.auth.admin.deleteUser(
+        userId
+      )
 
       return NextResponse.json(
         { error: profileError.message },
@@ -145,7 +160,9 @@ export async function POST(request: Request) {
     // Criar registo de professor
     if (role === 'professor') {
       const specialty =
-        String(body?.specialty || '').trim() || null
+        String(
+          body?.specialty || ''
+        ).trim() || null
 
       const { error: teacherError } =
         await admin.from('teachers').insert({
@@ -159,7 +176,9 @@ export async function POST(request: Request) {
           .delete()
           .eq('id', userId)
 
-        await admin.auth.admin.deleteUser(userId)
+        await admin.auth.admin.deleteUser(
+          userId
+        )
 
         return NextResponse.json(
           { error: teacherError.message },
@@ -171,10 +190,14 @@ export async function POST(request: Request) {
     // Criar registo de aluno/encarregado
     if (role === 'aluno_encarregado') {
       const guardianName =
-        String(body?.guardianName || '').trim() || null
+        String(
+          body?.guardianName || ''
+        ).trim() || null
 
       const guardianPhone =
-        String(body?.guardianPhone || '').trim() || null
+        String(
+          body?.guardianPhone || ''
+        ).trim() || null
 
       const guardianEmail =
         String(body?.guardianEmail || '')
@@ -198,7 +221,9 @@ export async function POST(request: Request) {
           .delete()
           .eq('id', userId)
 
-        await admin.auth.admin.deleteUser(userId)
+        await admin.auth.admin.deleteUser(
+          userId
+        )
 
         return NextResponse.json(
           { error: studentError.message },

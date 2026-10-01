@@ -588,9 +588,11 @@ export function DashboardClient({
 
       <Reschedules role={role} />
 
-      <div id="finance-anchor">
-        <Finance role={role} />
-      </div>
+     {role === 'administrador' && (
+  <div id="finance-anchor">
+    <Finance role={role} />
+  </div>
+)}
 
       <div id="leads-anchor">
         <Leads role={role} />

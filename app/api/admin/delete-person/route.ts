@@ -69,7 +69,6 @@ export async function POST(request: Request) {
     const body = await request.json()
 
     const type = String(body?.type || '').trim()
-
     const id = String(body?.id || '').trim()
 
     if (
@@ -101,9 +100,7 @@ export async function POST(request: Request) {
     )
 
     // =========================================================
-    // =========================================================
     // ALUNO
-    // =========================================================
     // =========================================================
 
     if (type === 'student') {
@@ -300,9 +297,7 @@ export async function POST(request: Request) {
     }
 
     // =========================================================
-    // =========================================================
     // PROFESSOR
-    // =========================================================
     // =========================================================
 
     const {
@@ -414,6 +409,35 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------
+    // IMPORTANTE:
+    // Apagar séries de aulas do professor
+    //
+    // Isto é necessário porque:
+    // lesson_series.teacher_id -> teachers.id
+    //
+    // Sem isto o Supabase bloqueia a eliminação do professor.
+    // ---------------------------------------------------------
+
+    const {
+      error: teacherLessonSeriesDeleteError,
+    } = await admin
+      .from('lesson_series')
+      .delete()
+      .eq('teacher_id', id)
+
+    if (
+      teacherLessonSeriesDeleteError
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            teacherLessonSeriesDeleteError.message,
+        },
+        { status: 400 }
+      )
+    }
+
+    // ---------------------------------------------------------
     // Apagar professor
     // ---------------------------------------------------------
 
@@ -435,13 +459,21 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------
+    // Nome do professor para mensagem final
+    // ---------------------------------------------------------
+
+    const teacherProfile =
+      Array.isArray(teacher.profile)
+        ? teacher.profile[0]
+        : teacher.profile
+
+    // ---------------------------------------------------------
     // Apagar perfil
     // ---------------------------------------------------------
 
     if (teacherProfileId) {
       const {
-        error:
-          teacherProfileDeleteError,
+        error: teacherProfileDeleteError,
       } = await admin
         .from('profiles')
         .delete()
@@ -467,8 +499,7 @@ export async function POST(request: Request) {
       // -------------------------------------------------------
 
       const {
-        error:
-          teacherAuthDeleteError,
+        error: teacherAuthDeleteError,
       } = await admin.auth.admin.deleteUser(
         teacherProfileId
       )
@@ -487,19 +518,15 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // Nome para mensagem final
+    // Sucesso
     // ---------------------------------------------------------
-
-    const teacherProfile =
-      Array.isArray(teacher.profile)
-        ? teacher.profile[0]
-        : teacher.profile
 
     return NextResponse.json({
       ok: true,
       message:
         `${teacherProfile?.full_name || 'Professor'} eliminado definitivamente.`,
     })
+
   } catch (error) {
     console.error(
       'Erro ao eliminar pessoa:',

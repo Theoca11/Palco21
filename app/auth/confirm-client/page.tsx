@@ -12,103 +12,130 @@ export default function ConfirmClientPage() {
 
   useEffect(() => {
     const supabase = createClient()
-
     let cancelled = false
 
     async function processAuth() {
       try {
         /*
-         * 1. Se vier um ?code=...
-         *    usamos o fluxo PKCE.
+         * CONVITES SUPABASE
+         *
+         * inviteUserByEmail pode devolver:
+         *
+         * #access_token=...
+         * &refresh_token=...
+         *
+         * O fragmento só existe no browser.
          */
-        const params = new URLSearchParams(
-          window.location.search
-        )
 
-        const code = params.get('code')
+        const hash = window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash
+
+        if (hash) {
+          const hashParams = new URLSearchParams(hash)
+
+          const accessToken =
+            hashParams.get('access_token')
+
+          const refreshToken =
+            hashParams.get('refresh_token')
+
+          const hashError =
+            hashParams.get('error_description')
+
+          if (hashError) {
+            throw new Error(
+              decodeURIComponent(
+                hashError.replace(/\+/g, ' ')
+              )
+            )
+          }
+
+          if (
+            accessToken &&
+            refreshToken
+          ) {
+            const {
+              error: sessionError,
+            } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+
+            if (sessionError) {
+              throw sessionError
+            }
+
+            /*
+             * Limpar os tokens do URL.
+             */
+            window.history.replaceState(
+              {},
+              document.title,
+              '/auth/confirm-client'
+            )
+          }
+        }
+
+        /*
+         * Também suportamos ?code=...
+         * caso seja utilizado PKCE.
+         */
+
+        const params =
+          new URLSearchParams(
+            window.location.search
+          )
+
+        const code =
+          params.get('code')
 
         if (code) {
-          const { error } =
+          const {
+            error: codeError,
+          } =
             await supabase.auth.exchangeCodeForSession(
               code
             )
 
-          if (error) {
-            console.error(
-              'Erro ao trocar código por sessão:',
-              error
-            )
+          if (codeError) {
+            throw codeError
+          }
+        }
 
+        /*
+         * Confirmar que temos sessão.
+         */
+
+        for (let i = 0; i < 20; i++) {
+          const {
+            data: { session },
+          } =
+            await supabase.auth.getSession()
+
+          if (session) {
             if (!cancelled) {
-              setError(
-                'O convite é inválido ou já expirou.'
+              window.location.replace(
+                '/definir-password'
               )
-              setLoading(false)
             }
 
             return
           }
-        }
 
-        /*
-         * 2. O Supabase também pode ter colocado
-         *    a sessão no fragmento #access_token...
-         *
-         *    O browser client trata esse fragmento
-         *    automaticamente.
-         *
-         *    Esperamos a sessão ficar disponível.
-         */
-        let session = null
-
-        for (let i = 0; i < 20; i++) {
-          const {
-            data: { session: currentSession },
-          } = await supabase.auth.getSession()
-
-          if (currentSession) {
-            session = currentSession
-            break
-          }
-
-          await new Promise((resolve) =>
-            setTimeout(resolve, 250)
+          await new Promise(
+            (resolve) =>
+              setTimeout(resolve, 250)
           )
         }
 
-        /*
-         * 3. Se ainda não houver sessão,
-         *    tentamos novamente através do estado
-         *    de autenticação.
-         */
-        if (!session) {
-          const {
-            data: { session: currentSession },
-          } = await supabase.auth.getSession()
-
-          session = currentSession
-        }
-
-        if (cancelled) return
-
-        if (!session) {
+        if (!cancelled) {
           setError(
-            'Não foi possível validar o convite. O link pode ter expirado.'
+            'Não foi possível validar o convite. O link pode ter expirado ou já ter sido utilizado.'
           )
-          setLoading(false)
-          return
-        }
 
-        /*
-         * 4. Convite validado.
-         *
-         *    NÃO mandamos para /login.
-         *
-         *    Mandamos diretamente para criar a password.
-         */
-        window.location.replace(
-          '/definir-password'
-        )
+          setLoading(false)
+        }
       } catch (err) {
         console.error(
           'Erro ao processar convite:',
@@ -117,29 +144,36 @@ export default function ConfirmClientPage() {
 
         if (!cancelled) {
           setError(
-            'Ocorreu um erro ao validar o convite.'
+            err instanceof Error
+              ? err.message
+              : 'Não foi possível validar o convite.'
           )
+
           setLoading(false)
         }
       }
     }
 
     /*
-     * Também ouvimos alterações de autenticação.
-     * Isto é especialmente importante para links
-     * que chegam através de #access_token.
+     * Se a sessão for criada pelo Supabase,
+     * avançamos imediatamente.
      */
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session && !cancelled) {
-          window.location.replace(
-            '/definir-password'
-          )
+    } =
+      supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          if (
+            session &&
+            !cancelled
+          ) {
+            window.location.replace(
+              '/definir-password'
+            )
+          }
         }
-      }
-    )
+      )
 
     processAuth()
 
@@ -155,7 +189,10 @@ export default function ConfirmClientPage() {
 
         <div className="mb-6">
           <div className="text-2xl font-bold text-black">
-            PALCO <span className="text-red-600">21</span>
+            PALCO{' '}
+            <span className="text-red-600">
+              21
+            </span>
           </div>
         </div>
 
@@ -166,8 +203,8 @@ export default function ConfirmClientPage() {
             </h1>
 
             <p className="mt-3 text-sm text-gray-600">
-              Aguarda um momento. Estamos a preparar
-              o acesso à tua conta.
+              Aguarda um momento. Estamos a
+              preparar o acesso à tua conta.
             </p>
 
             <div className="mt-6">

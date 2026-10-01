@@ -4,6 +4,10 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
   try {
+    // =========================================================
+    // 1. Verificar utilizador autenticado
+    // =========================================================
+
     const supabase = await createClient()
 
     const {
@@ -17,34 +21,77 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    // =========================================================
+    // 2. Verificar se é administrador
+    // =========================================================
 
-    if (profile?.role !== 'administrador') {
+    const { data: adminProfile, error: adminProfileError } =
+      await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (
+      adminProfileError ||
+      adminProfile?.role !== 'administrador'
+    ) {
       return NextResponse.json(
         { error: 'Sem permissão.' },
         { status: 403 }
       )
     }
 
+    // =========================================================
+    // 3. Verificar Service Role Key
+    // =========================================================
+
+    const serviceRoleKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL
+
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        {
+          error:
+            'Configuração do Supabase incompleta.',
+        },
+        { status: 500 }
+      )
+    }
+
+    // =========================================================
+    // 4. Ler dados enviados pelo People.tsx
+    // =========================================================
+
     const body = await request.json()
 
-    const type = body?.type
+    const type = String(body?.type || '').trim()
+
     const id = String(body?.id || '').trim()
 
-    if (!id || !['student', 'teacher'].includes(type)) {
+    if (
+      !id ||
+      !['student', 'teacher'].includes(type)
+    ) {
       return NextResponse.json(
-        { error: 'Dados inválidos.' },
+        {
+          error:
+            'Tipo ou ID inválido.',
+        },
         { status: 400 }
       )
     }
 
+    // =========================================================
+    // 5. Cliente ADMIN
+    // =========================================================
+
     const admin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      supabaseUrl,
+      serviceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -53,157 +100,418 @@ export async function POST(request: Request) {
       }
     )
 
-    // =========================
+    // =========================================================
+    // =========================================================
     // ALUNO
-    // =========================
+    // =========================================================
+    // =========================================================
 
     if (type === 'student') {
-      const { data: student, error } = await admin
+      // -------------------------------------------------------
+      // Procurar aluno
+      // -------------------------------------------------------
+
+      const {
+        data: student,
+        error: studentFindError,
+      } = await admin
         .from('students')
-        .select('id,profile_id,full_name,email')
+        .select(
+          'id, profile_id, full_name, email'
+        )
         .eq('id', id)
         .single()
 
-      if (error || !student) {
+      if (
+        studentFindError ||
+        !student
+      ) {
         return NextResponse.json(
-          { error: 'Aluno não encontrado.' },
+          {
+            error:
+              'Aluno não encontrado.',
+          },
           { status: 404 }
         )
       }
 
-      const { data: lessons } = await admin
+      const studentProfileId =
+        student.profile_id
+
+      // -------------------------------------------------------
+      // Procurar aulas do aluno
+      // -------------------------------------------------------
+
+      const {
+        data: studentLessons,
+        error: studentLessonsFindError,
+      } = await admin
         .from('lessons')
         .select('id')
         .eq('student_id', id)
 
-      const lessonIds =
-        lessons?.map((lesson) => lesson.id) || []
-
-      if (lessonIds.length) {
-        await admin
-          .from('reschedule_requests')
-          .delete()
-          .in('lesson_id', lessonIds)
-      }
-
-      await admin
-        .from('lessons')
-        .delete()
-        .eq('student_id', id)
-
-      await admin
-        .from('monthly_payments')
-        .delete()
-        .eq('student_id', id)
-
-      await admin
-        .from('student_instruments')
-        .delete()
-        .eq('student_id', id)
-
-      const { error: deleteError } = await admin
-        .from('students')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) {
+      if (studentLessonsFindError) {
         return NextResponse.json(
-          { error: deleteError.message },
+          {
+            error:
+              studentLessonsFindError.message,
+          },
           { status: 400 }
         )
       }
 
-      if (student.profile_id) {
-        await admin.auth.admin.deleteUser(
-          student.profile_id
+      const studentLessonIds =
+        (studentLessons || []).map(
+          (lesson) => lesson.id
         )
+
+      // -------------------------------------------------------
+      // Apagar pedidos de remarcação
+      // -------------------------------------------------------
+
+      if (
+        studentLessonIds.length > 0
+      ) {
+        const {
+          error:
+            studentRescheduleDeleteError,
+        } = await admin
+          .from('reschedule_requests')
+          .delete()
+          .in(
+            'lesson_id',
+            studentLessonIds
+          )
+
+        if (
+          studentRescheduleDeleteError
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                studentRescheduleDeleteError.message,
+            },
+            { status: 400 }
+          )
+        }
+      }
+
+      // -------------------------------------------------------
+      // Apagar aulas
+      // -------------------------------------------------------
+
+      const {
+        error: studentLessonsDeleteError,
+      } = await admin
+        .from('lessons')
+        .delete()
+        .eq('student_id', id)
+
+      if (
+        studentLessonsDeleteError
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              studentLessonsDeleteError.message,
+          },
+          { status: 400 }
+        )
+      }
+
+      // -------------------------------------------------------
+      // Apagar aluno
+      // -------------------------------------------------------
+
+      const {
+        error: studentDeleteError,
+      } = await admin
+        .from('students')
+        .delete()
+        .eq('id', id)
+
+      if (studentDeleteError) {
+        return NextResponse.json(
+          {
+            error:
+              studentDeleteError.message,
+          },
+          { status: 400 }
+        )
+      }
+
+      // -------------------------------------------------------
+      // Apagar perfil
+      // -------------------------------------------------------
+
+      if (studentProfileId) {
+        const {
+          error:
+            studentProfileDeleteError,
+        } = await admin
+          .from('profiles')
+          .delete()
+          .eq(
+            'id',
+            studentProfileId
+          )
+
+        if (
+          studentProfileDeleteError
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                studentProfileDeleteError.message,
+            },
+            { status: 400 }
+          )
+        }
+
+        // -----------------------------------------------------
+        // Apagar conta Auth definitivamente
+        // -----------------------------------------------------
+
+        const {
+          error:
+            studentAuthDeleteError,
+        } = await admin.auth.admin.deleteUser(
+          studentProfileId
+        )
+
+        if (
+          studentAuthDeleteError
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                `Aluno eliminado, mas a conta de acesso não foi eliminada: ${studentAuthDeleteError.message}`,
+            },
+            { status: 400 }
+          )
+        }
       }
 
       return NextResponse.json({
         ok: true,
-        message: `${student.full_name || 'Aluno'} eliminado definitivamente.`,
+        message:
+          `${student.full_name || 'Aluno'} eliminado definitivamente.`,
       })
     }
 
-    // =========================
+    // =========================================================
+    // =========================================================
     // PROFESSOR
-    // =========================
+    // =========================================================
+    // =========================================================
 
-    const { data: teacher, error } = await admin
+    const {
+      data: teacher,
+      error: teacherFindError,
+    } = await admin
       .from('teachers')
       .select(
-        'id,profile_id,profile:profiles(full_name,email)'
+        'id, profile_id, profile:profiles(full_name, email)'
       )
       .eq('id', id)
       .single()
 
-    if (error || !teacher) {
+    if (
+      teacherFindError ||
+      !teacher
+    ) {
       return NextResponse.json(
-        { error: 'Professor não encontrado.' },
+        {
+          error:
+            'Professor não encontrado.',
+        },
         { status: 404 }
       )
     }
 
-    const { data: lessons } = await admin
+    const teacherProfileId =
+      teacher.profile_id
+
+    // ---------------------------------------------------------
+    // Procurar aulas do professor
+    // ---------------------------------------------------------
+
+    const {
+      data: teacherLessons,
+      error: teacherLessonsFindError,
+    } = await admin
       .from('lessons')
       .select('id')
       .eq('teacher_id', id)
 
-    const lessonIds =
-      lessons?.map((lesson) => lesson.id) || []
-
-    if (lessonIds.length) {
-      await admin
-        .from('reschedule_requests')
-        .delete()
-        .in('lesson_id', lessonIds)
-    }
-
-    await admin
-      .from('lessons')
-      .delete()
-      .eq('teacher_id', id)
-
-    await admin
-      .from('teacher_monthly_payments')
-      .delete()
-      .eq('teacher_id', id)
-
-    const { error: deleteError } = await admin
-      .from('teachers')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) {
+    if (teacherLessonsFindError) {
       return NextResponse.json(
-        { error: deleteError.message },
+        {
+          error:
+            teacherLessonsFindError.message,
+        },
         { status: 400 }
       )
     }
 
-    if (teacher.profile_id) {
-      await admin.auth.admin.deleteUser(
-        teacher.profile_id
+    const teacherLessonIds =
+      (teacherLessons || []).map(
+        (lesson) => lesson.id
+      )
+
+    // ---------------------------------------------------------
+    // Apagar pedidos de remarcação
+    // ---------------------------------------------------------
+
+    if (
+      teacherLessonIds.length > 0
+    ) {
+      const {
+        error:
+          teacherRescheduleDeleteError,
+      } = await admin
+        .from('reschedule_requests')
+        .delete()
+        .in(
+          'lesson_id',
+          teacherLessonIds
+        )
+
+      if (
+        teacherRescheduleDeleteError
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              teacherRescheduleDeleteError.message,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // ---------------------------------------------------------
+    // Apagar aulas do professor
+    // ---------------------------------------------------------
+
+    const {
+      error: teacherLessonsDeleteError,
+    } = await admin
+      .from('lessons')
+      .delete()
+      .eq('teacher_id', id)
+
+    if (
+      teacherLessonsDeleteError
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            teacherLessonsDeleteError.message,
+        },
+        { status: 400 }
       )
     }
 
-    const profile = Array.isArray(teacher.profile)
-      ? teacher.profile[0]
-      : teacher.profile
+    // ---------------------------------------------------------
+    // Apagar professor
+    // ---------------------------------------------------------
+
+    const {
+      error: teacherDeleteError,
+    } = await admin
+      .from('teachers')
+      .delete()
+      .eq('id', id)
+
+    if (teacherDeleteError) {
+      return NextResponse.json(
+        {
+          error:
+            teacherDeleteError.message,
+        },
+        { status: 400 }
+      )
+    }
+
+    // ---------------------------------------------------------
+    // Apagar perfil
+    // ---------------------------------------------------------
+
+    if (teacherProfileId) {
+      const {
+        error:
+          teacherProfileDeleteError,
+      } = await admin
+        .from('profiles')
+        .delete()
+        .eq(
+          'id',
+          teacherProfileId
+        )
+
+      if (
+        teacherProfileDeleteError
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              teacherProfileDeleteError.message,
+          },
+          { status: 400 }
+        )
+      }
+
+      // -------------------------------------------------------
+      // Apagar conta Auth definitivamente
+      // -------------------------------------------------------
+
+      const {
+        error:
+          teacherAuthDeleteError,
+      } = await admin.auth.admin.deleteUser(
+        teacherProfileId
+      )
+
+      if (
+        teacherAuthDeleteError
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              `Professor eliminado, mas a conta de acesso não foi eliminada: ${teacherAuthDeleteError.message}`,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // ---------------------------------------------------------
+    // Nome para mensagem final
+    // ---------------------------------------------------------
+
+    const teacherProfile =
+      Array.isArray(teacher.profile)
+        ? teacher.profile[0]
+        : teacher.profile
 
     return NextResponse.json({
       ok: true,
-      message: `${profile?.full_name || 'Professor'} eliminado definitivamente.`,
+      message:
+        `${teacherProfile?.full_name || 'Professor'} eliminado definitivamente.`,
     })
   } catch (error) {
-    console.error(error)
+    console.error(
+      'Erro ao eliminar pessoa:',
+      error
+    )
 
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : 'Erro inesperado.',
+            : 'Erro inesperado ao eliminar.',
       },
       { status: 500 }
     )

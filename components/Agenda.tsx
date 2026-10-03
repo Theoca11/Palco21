@@ -257,7 +257,7 @@ const [form, setForm] = useState({
     d.setHours(17, 0, 0, 0);
 
     setForm({
-      student_id: '',
+      student_ids: [],
       teacher_id: '',
       instrument_id: '',
       date: localDateValue(d),

@@ -275,10 +275,18 @@ const [form, setForm] = useState({
     setError('');
     setSuccess('');
 
-    if (!form.student_id || !form.teacher_id || !form.instrument_id || !form.date || !form.time) {
-      setError('Preenche aluno, professor, instrumento, data e hora.');
-      return;
-    }
+   if (
+  !form.student_ids.length ||
+  !form.teacher_id ||
+  !form.instrument_id ||
+  !form.date ||
+  !form.time
+) {
+  setError(
+    'Seleciona pelo menos um aluno, professor, instrumento, data e hora.'
+  );
+  return;
+}
 
     const starts = localDateTimeToDate(form.date, form.time);
 

@@ -88,16 +88,16 @@ export function Agenda({ role }: { role: string }) {
   const [showFullAgenda, setShowFullAgenda] = useState(false);
   const [seriesLesson, setSeriesLesson] = useState<Lesson | null>(null);
   const [seriesForm, setSeriesForm] = useState({ time: '17:00', repeatUntil: '' });
-  const [form, setForm] = useState({
-    student_id: '',
-    teacher_id: '',
-    instrument_id: '',
-    date: '',
-    time: '17:00',
-    repeatWeekly: false,
-    repeatUntil: '',
-    notes: ''
-  });
+const [form, setForm] = useState({
+  student_ids: [] as string[],
+  teacher_id: '',
+  instrument_id: '',
+  date: '',
+  time: '17:00',
+  repeatWeekly: false,
+  repeatUntil: '',
+  notes: ''
+});
 
   const monday = week;
   const sunday = addDays(monday, 7);

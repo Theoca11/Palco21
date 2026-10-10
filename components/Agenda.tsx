@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -13,15 +14,14 @@ type Lesson = {
   status: string;
   notes: string | null;
   student?: {
-    profile?: { full_name: string } | null;
+    full_name?: string | null;
+    profile?: { full_name: string | null } | null;
     guardian_name?: string | null;
   } | null;
   teacher?: {
-    profile?: { full_name: string } | null;
+    profile?: { full_name: string | null } | null;
   } | null;
-  instrument?: {
-    name: string;
-  } | null;
+  instrument?: { name: string } | null;
   series?: {
     repeat_until: string;
     active: boolean;
@@ -29,21 +29,15 @@ type Lesson = {
   } | null;
 };
 
-type Option = {
-  id: string;
-  name: string;
-};
+type Option = { id: string; name: string };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function startOfWeek(d: Date) {
   const x = new Date(d);
   const day = x.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-
-  x.setDate(x.getDate() + diff);
+  x.setDate(x.getDate() + (day === 0 ? -6 : 1 - day));
   x.setHours(0, 0, 0, 0);
-
   return x;
 }
 
@@ -82,12 +76,21 @@ function localDateTimeToDate(date: string, time: string) {
 
 function academicYearEnd(dateText: string) {
   const d = new Date(`${dateText}T12:00:00`);
-  const year =
-    d.getMonth() >= 8
-      ? d.getFullYear() + 1
-      : d.getFullYear();
+  const year = d.getMonth() >= 8
+    ? d.getFullYear() + 1
+    : d.getFullYear();
 
   return `${year}-07-31`;
+}
+
+function studentName(lesson: Lesson) {
+  return lesson.student?.full_name
+    || lesson.student?.profile?.full_name
+    || 'Aluno';
+}
+
+function teacherName(lesson: Lesson) {
+  return lesson.teacher?.profile?.full_name || 'Professor';
 }
 
 export function Agenda({ role }: { role: string }) {
@@ -95,7 +98,6 @@ export function Agenda({ role }: { role: string }) {
 
   const [week, setWeek] = useState(startOfWeek(new Date()));
   const [lessons, setLessons] = useState<Lesson[]>([]);
-
   const [students, setStudents] = useState<Option[]>([]);
   const [teachers, setTeachers] = useState<Option[]>([]);
   const [instruments, setInstruments] = useState<Option[]>([]);
@@ -103,13 +105,11 @@ export function Agenda({ role }: { role: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
   const [showAdd, setShowAdd] = useState(false);
   const [showFullAgenda, setShowFullAgenda] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [seriesLesson, setSeriesLesson] =
-    useState<Lesson | null>(null);
-
+  const [seriesLesson, setSeriesLesson] = useState<Lesson | null>(null);
   const [seriesForm, setSeriesForm] = useState({
     time: '17:00',
     repeatUntil: ''
@@ -130,12 +130,10 @@ export function Agenda({ role }: { role: string }) {
   const sunday = addDays(monday, 7);
 
   const weekLessons = useMemo(
-    () =>
-      lessons.filter(l => {
-        const t = new Date(l.starts_at);
-
-        return t >= monday && t < sunday;
-      }),
+    () => lessons.filter(l => {
+      const d = new Date(l.starts_at);
+      return d >= monday && d < sunday;
+    }),
     [lessons, monday, sunday]
   );
 
@@ -143,227 +141,146 @@ export function Agenda({ role }: { role: string }) {
     setLoading(true);
     setError('');
 
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('lessons')
-      .select(
-        'id,student_id,teacher_id,instrument_id,series_id,starts_at,status,notes,student:students(profile:profiles(full_name),guardian_name),teacher:teachers(profile:profiles(full_name)),instrument:instruments(name),series:lesson_series(repeat_until,active,start_time)'
-      )
-      .gte(
-        'starts_at',
-        monday.toISOString()
-      )
-      .lt(
-        'starts_at',
-        (
-          showFullAgenda
-            ? new Date(
-                `${academicYearEnd(
-                  localDateValue(monday)
-                )}T23:59:59.999`
-              )
-            : sunday
-        ).toISOString()
-      )
-      .order('starts_at');
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    setLessons(
-      (data || []).map((row: any) => ({
-        ...row,
-        student: Array.isArray(row.student)
-          ? row.student[0] ?? null
-          : row.student,
-        teacher: Array.isArray(row.teacher)
-          ? row.teacher[0] ?? null
-          : row.teacher,
-        instrument: Array.isArray(row.instrument)
-          ? row.instrument[0] ?? null
-          : row.instrument,
-        series: Array.isArray(row.series)
-          ? row.series[0] ?? null
-          : row.series
-      })) as Lesson[]
-    );
-
-    const [s, t, i] = await Promise.all([
-      supabase
-        .from('students')
-        .select(
-          'id,full_name,profile_id'
-        )
-        .eq('status', 'ativo')
-        .order('full_name'),
-
-      supabase
-        .from('teachers')
-        .select(
-          'id,profile_id,specialty,active'
-        )
-        .eq('active', true),
-
-      supabase
-        .from('instruments')
-        .select('id,name')
-        .order('name')
-    ]);
-
-    if (s.error) {
-      setError(
-        `Alunos: ${s.error.message}`
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (t.error) {
-      setError(
-        `Professores: ${t.error.message}`
-      );
-      setLoading(false);
-      return;
-    }
-
-    if (i.error) {
-      setError(
-        `Instrumentos: ${i.error.message}`
-      );
-      setLoading(false);
-      return;
-    }
-
-    const studentProfileIds =
-      (s.data || [])
-        .map((x: any) => x.profile_id)
-        .filter(Boolean);
-
-    const teacherProfileIds =
-      (t.data || [])
-        .map((x: any) => x.profile_id)
-        .filter(Boolean);
-
-    const allProfileIds = Array.from(
-      new Set([
-        ...studentProfileIds,
-        ...teacherProfileIds
-      ])
-    );
-
-    let profiles: Record<string, string> =
-      {};
-
-    if (allProfileIds.length) {
+    try {
       const {
-        data: profileRows,
-        error: profilesError
-      } = await supabase
-        .from('profiles')
-        .select('id,full_name')
-        .in('id', allProfileIds);
+        data: { user },
+        error: authError
+      } = await supabase.auth.getUser();
 
-      if (profilesError) {
-        setError(
-          `Perfis: ${profilesError.message}`
-        );
+      if (authError) throw authError;
+
+      if (!user) {
+        setLessons([]);
         setLoading(false);
         return;
       }
 
-      profiles = Object.fromEntries(
-        (profileRows || []).map(
-          (p: any) => [
-            p.id,
-            p.full_name
-          ]
-        )
-      );
-    }
+      const endDate = showFullAgenda
+        ? new Date(`${academicYearEnd(localDateValue(monday))}T23:59:59.999`)
+        : sunday;
 
-    setStudents(
-      (s.data || []).map((x: any) => ({
-        id: x.id,
-        name:
-          x.full_name ||
-          profiles[x.profile_id] ||
-          'Sem nome'
-      }))
-    );
+      const { data, error: lessonError } = await supabase
+        .from('lessons')
+        .select(`
+          id,
+          student_id,
+          teacher_id,
+          instrument_id,
+          series_id,
+          starts_at,
+          status,
+          notes,
+          student:students(
+            full_name,
+            guardian_name,
+            profile:profiles(full_name)
+          ),
+          teacher:teachers(
+            profile:profiles(full_name)
+          ),
+          instrument:instruments(name),
+          series:lesson_series(
+            repeat_until,
+            active,
+            start_time
+          )
+        `)
+        .gte('starts_at', monday.toISOString())
+        .lt('starts_at', endDate.toISOString())
+        .order('starts_at');
 
-    const loadedTeachers =
-      (t.data || []).map((x: any) => ({
+      if (lessonError) throw lessonError;
+
+      setLessons((data || []).map((row: any) => ({
+        ...row,
+        student: Array.isArray(row.student) ? row.student[0] ?? null : row.student,
+        teacher: Array.isArray(row.teacher) ? row.teacher[0] ?? null : row.teacher,
+        instrument: Array.isArray(row.instrument) ? row.instrument[0] ?? null : row.instrument,
+        series: Array.isArray(row.series) ? row.series[0] ?? null : row.series
+      })) as Lesson[]);
+
+      const [s, t, i] = await Promise.all([
+        supabase
+          .from('students')
+          .select('id,full_name,profile_id')
+          .eq('status', 'ativo')
+          .order('full_name'),
+
+        supabase
+          .from('teachers')
+          .select('id,profile_id,active')
+          .eq('active', true),
+
+        supabase
+          .from('instruments')
+          .select('id,name')
+          .order('name')
+      ]);
+
+      if (s.error) throw new Error(`Alunos: ${s.error.message}`);
+      if (t.error) throw new Error(`Professores: ${t.error.message}`);
+      if (i.error) throw new Error(`Instrumentos: ${i.error.message}`);
+
+      const profileIds = Array.from(new Set([
+        ...(s.data || []).map((x: any) => x.profile_id),
+        ...(t.data || []).map((x: any) => x.profile_id)
+      ].filter(Boolean)));
+
+      let profiles: Record<string, string> = {};
+
+      if (profileIds.length) {
+        const { data: profileRows, error: profileError } = await supabase
+          .from('profiles')
+          .select('id,full_name')
+          .in('id', profileIds);
+
+        if (profileError) throw profileError;
+
+        profiles = Object.fromEntries(
+          (profileRows || []).map((p: any) => [p.id, p.full_name])
+        );
+      }
+
+      setStudents((s.data || []).map((x: any) => ({
         id: x.id,
-        name:
-          profiles[x.profile_id] ||
-          'Sem nome',
+        name: x.full_name || profiles[x.profile_id] || 'Sem nome'
+      })));
+
+      const availableTeachers = (t.data || []).map((x: any) => ({
+        id: x.id,
+        name: profiles[x.profile_id] || 'Sem nome',
         profile_id: x.profile_id
       }));
 
-    setTeachers(
-      role === 'professor'
-        ? loadedTeachers
-            .filter(
-              (x: any) =>
-                x.profile_id === user.id
-            )
-            .map(
-              ({
-                id,
-                name
-              }: any) => ({
-                id,
-                name
-              })
-            )
-        : loadedTeachers.map(
-            ({
-              id,
-              name
-            }: any) => ({
-              id,
-              name
-            })
-          )
-    );
+      setTeachers(
+        role === 'professor'
+          ? availableTeachers
+              .filter((x: any) => x.profile_id === user.id)
+              .map(({ id, name }: any) => ({ id, name }))
+          : availableTeachers.map(({ id, name }: any) => ({ id, name }))
+      );
 
-    setInstruments(
-      (i.data || []) as Option[]
-    );
-
-    setLoading(false);
+      setInstruments((i.data || []) as Option[]);
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível carregar a agenda.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, [week, showFullAgenda]);
 
   function move(n: number) {
-    setWeek(
-      addDays(
-        week,
-        n * 7
-      )
-    );
+    setWeek(addDays(week, n * 7));
   }
 
   function openNew() {
-    setSuccess('');
     setError('');
+    setSuccess('');
 
-    const d = addDays(monday, 0);
-
+    const d = new Date(monday);
     d.setHours(17, 0, 0, 0);
 
     setForm({
@@ -371,22 +288,27 @@ export function Agenda({ role }: { role: string }) {
       teacher_id: '',
       instrument_id: '',
       date: localDateValue(d),
-      time: localTimeValue(d),
+      time: '17:00',
       repeatWeekly: false,
-      repeatUntil:
-        academicYearEnd(
-          localDateValue(d)
-        ),
+      repeatUntil: academicYearEnd(localDateValue(d)),
       notes: ''
     });
 
     setShowAdd(true);
   }
 
-  async function addLesson(
-    e: React.FormEvent
-  ) {
+  function toggleStudent(id: string) {
+    setForm(current => ({
+      ...current,
+      student_ids: current.student_ids.includes(id)
+        ? current.student_ids.filter(x => x !== id)
+        : [...current.student_ids, id]
+    }));
+  }
+
+  async function addLesson(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
 
     setError('');
     setSuccess('');
@@ -398,372 +320,172 @@ export function Agenda({ role }: { role: string }) {
       !form.date ||
       !form.time
     ) {
-      setError(
-        'Seleciona pelo menos um aluno, professor, instrumento, data e hora.'
-      );
+      setError('Seleciona pelo menos um aluno, professor, instrumento, data e hora.');
       return;
     }
 
-    const starts =
-      localDateTimeToDate(
-        form.date,
-        form.time
-      );
+    const starts = localDateTimeToDate(form.date, form.time);
 
-    if (
-      Number.isNaN(
-        starts.getTime()
-      )
-    ) {
-      setError(
-        'Data ou hora inválida.'
-      );
+    if (Number.isNaN(starts.getTime())) {
+      setError('Data ou hora inválida.');
       return;
     }
 
-    const occurrences: Date[] =
-      [starts];
+    const occurrences: Date[] = [starts];
 
     if (form.repeatWeekly) {
       if (!form.repeatUntil) {
-        setError(
-          'Indica até quando queres repetir a aula.'
-        );
+        setError('Indica até quando queres repetir a aula.');
         return;
       }
 
-      const until =
-        localDateTimeToDate(
-          form.repeatUntil,
-          form.time
-        );
+      const until = localDateTimeToDate(form.repeatUntil, form.time);
 
-      if (
-        Number.isNaN(
-          until.getTime()
-        ) ||
-        until < starts
-      ) {
-        setError(
-          'A data final da repetição tem de ser igual ou posterior à primeira aula.'
-        );
+      if (Number.isNaN(until.getTime()) || until < starts) {
+        setError('A data final tem de ser igual ou posterior à primeira aula.');
         return;
       }
 
-      let cursor =
-        new Date(starts);
+      let cursor = new Date(starts);
 
       while (true) {
-        cursor = addDays(
-          cursor,
-          7
-        );
+        cursor = addDays(cursor, 7);
+        if (cursor > until) break;
 
-        if (cursor > until)
-          break;
+        occurrences.push(new Date(cursor));
 
-        occurrences.push(
-          new Date(cursor)
-        );
-
-        if (
-          occurrences.length >
-          60
-        ) {
-          setError(
-            'A série excede o limite de 60 ocorrências.'
-          );
+        if (occurrences.length > 60) {
+          setError('A série excede o limite de 60 ocorrências.');
           return;
         }
       }
     }
 
-    /*
-     * IMPORTANTE:
-     *
-     * Uma aula pode ter vários alunos no mesmo horário.
-     * Por isso não bloqueamos simplesmente porque já existe
-     * outra aula nesse horário.
-     *
-     * Exemplo:
-     *
-     * 17:00 - João
-     * 17:00 - Maria
-     * 17:00 - Pedro
-     *
-     * Isto representa uma aula de grupo.
-     */
+    setSaving(true);
 
-    let seriesId: string | null =
-      null;
-
-    if (form.repeatWeekly) {
-      const {
-        data: series,
-        error: seriesError
-      } = await supabase
-        .from('lesson_series')
-        .insert({
-          /*
-           * lesson_series atualmente tem um student_id único.
-           * Guardamos o primeiro aluno como referência da série.
-           * As aulas individuais ficam todas ligadas pelo mesmo
-           * series_id.
-           */
-          student_id:
-            form.student_ids[0],
-
-          teacher_id:
-            form.teacher_id,
-
-          instrument_id:
-            form.instrument_id,
-
-          first_starts_at:
-            starts.toISOString(),
-
-          start_time:
-            form.time,
-
-          weekday:
-            starts.getDay() === 0
-              ? 7
-              : starts.getDay(),
-
-          repeat_until:
-            form.repeatUntil,
-
-          active: true
-        })
-        .select('id')
-        .single();
-
-      if (
-        seriesError ||
-        !series
-      ) {
-        setError(
-          seriesError?.message ||
-            'Não foi possível criar a série.'
-        );
-        return;
-      }
-
-      seriesId =
-        series.id;
-    }
-
-    /*
-     * Uma ocorrência × vários alunos.
-     *
-     * Exemplo:
-     *
-     * 3 alunos × 10 semanas =
-     * 30 linhas em lessons.
-     */
-    const rows =
-      occurrences.flatMap(
-        occurrence =>
-          form.student_ids.map(
-            student_id => ({
-              student_id,
-
-              teacher_id:
-                form.teacher_id,
-
-              instrument_id:
-                form.instrument_id,
-
-              series_id:
-                seriesId,
-
-              starts_at:
-                occurrence.toISOString(),
-
-              duration_minutes: 50,
-
-              notes:
-                form.notes ||
-                null
-            })
-          )
-      );
-
-    const {
-      error: lessonsError
-    } = await supabase
-      .from('lessons')
-      .insert(rows);
-
-    if (lessonsError) {
-      if (seriesId) {
-        await supabase
-          .from('lesson_series')
-          .delete()
-          .eq(
-            'id',
-            seriesId
-          );
-      }
-
-      setError(
-        lessonsError.message
-      );
-      return;
-    }
-
-    setShowAdd(false);
-
-    const studentCount =
-      form.student_ids.length;
-
-    const occurrenceCount =
-      occurrences.length;
-
-    if (form.repeatWeekly) {
-      setSuccess(
-        `${studentCount} aluno${
-          studentCount === 1
-            ? ''
-            : 's'
-        } adicionado${
-          studentCount === 1
-            ? ''
-            : 's'
-        } à série semanal: ${occurrenceCount} aulas por aluno, até ${form.repeatUntil}.`
-      );
-    } else {
-      setSuccess(
-        `${studentCount} aluno${
-          studentCount === 1
-            ? ''
-            : 's'
-        } adicionado${
-          studentCount === 1
-            ? ''
-            : 's'
-        } à mesma aula.`
-      );
-    }
+    let seriesId: string | null = null;
 
     try {
-      await fetch(
-        '/api/notifications/enqueue',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json'
-          },
-          body: JSON.stringify({
-            items: [
-              {
-                channel: 'email',
-                recipient:
-                  'admin@palco21.pt',
-
-                subject:
-                  form.repeatWeekly
-                    ? 'Série semanal — Palco 21'
-                    : 'Nova aula — Palco 21',
-
-                body:
-                  form.repeatWeekly
-                    ? `Foi criada uma série semanal para ${studentCount} aluno${studentCount === 1 ? '' : 's'}, com ${occurrenceCount} ocorrências por aluno, a partir de ${starts.toLocaleString('pt-PT')}.`
-                    : `Foi criada uma aula para ${studentCount} aluno${studentCount === 1 ? '' : 's'} no mesmo horário: ${starts.toLocaleString('pt-PT')}.`,
-
-                event_type:
-                  'lesson_created'
-              }
-            ]
+      if (form.repeatWeekly) {
+        const { data: series, error: seriesError } = await supabase
+          .from('lesson_series')
+          .insert({
+            student_id: form.student_ids[0],
+            teacher_id: form.teacher_id,
+            instrument_id: form.instrument_id,
+            first_starts_at: starts.toISOString(),
+            start_time: form.time,
+            weekday: starts.getDay() === 0 ? 7 : starts.getDay(),
+            repeat_until: form.repeatUntil,
+            active: true
           })
-        }
-      );
-    } catch {}
+          .select('id')
+          .single();
 
-    await load();
+        if (seriesError || !series) {
+          throw new Error(seriesError?.message || 'Não foi possível criar a série.');
+        }
+
+        seriesId = series.id;
+      }
+
+      // Cada aluno recebe um registo em cada ocorrência.
+      // Aulas do mesmo professor à mesma hora formam um grupo.
+      const rows = occurrences.flatMap(occurrence =>
+        form.student_ids.map(student_id => ({
+          student_id,
+          teacher_id: form.teacher_id,
+          instrument_id: form.instrument_id,
+          series_id: seriesId,
+          starts_at: occurrence.toISOString(),
+          duration_minutes: 50,
+          notes: form.notes.trim() || null
+        }))
+      );
+
+      const { error: insertError } = await supabase
+        .from('lessons')
+        .insert(rows);
+
+      if (insertError) {
+        if (seriesId) {
+          await supabase.from('lesson_series').delete().eq('id', seriesId);
+        }
+        throw insertError;
+      }
+
+      const studentCount = form.student_ids.length;
+
+      setShowAdd(false);
+      setSuccess(
+        form.repeatWeekly
+          ? `Série criada: ${studentCount} aluno(s), ${occurrences.length} aulas por aluno.`
+          : `Aula criada para ${studentCount} aluno(s) no mesmo horário.`
+      );
+
+      try {
+        await fetch('/api/notifications/enqueue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: [{
+              channel: 'email',
+              recipient: 'admin@palco21.pt',
+              subject: form.repeatWeekly
+                ? 'Série semanal — Palco 21'
+                : 'Nova aula — Palco 21',
+              body: form.repeatWeekly
+                ? `Foi criada uma série semanal para ${studentCount} aluno(s), com ${occurrences.length} aulas por aluno, a partir de ${starts.toLocaleString('pt-PT')}.`
+                : `Foi criada uma aula para ${studentCount} aluno(s), no mesmo horário: ${starts.toLocaleString('pt-PT')}.`,
+              event_type: 'lesson_created'
+            }]
+          })
+        });
+      } catch {
+        // A falha de notificação não invalida a aula criada.
+      }
+
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível criar a aula.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function cancelLesson(
-    lesson: Lesson
-  ) {
-    if (
-      lesson.status ===
-      'cancelada'
-    )
-      return;
+  async function cancelLesson(lesson: Lesson) {
+    if (lesson.status === 'cancelada') return;
 
-    const name =
-      lesson.student?.profile
-        ?.full_name ||
-      'esta aula';
-
-    const when =
-      new Date(
-        lesson.starts_at
-      ).toLocaleString(
-        'pt-PT'
-      );
-
-    const ok =
-      window.confirm(
-        `Cancelar a aula de ${name} em ${when}?`
-      );
+    const ok = window.confirm(
+      `Cancelar a aula de ${studentName(lesson)} em ${new Date(lesson.starts_at).toLocaleString('pt-PT')}?`
+    );
 
     if (!ok) return;
 
     setError('');
     setSuccess('');
 
-    const {
-      error
-    } = await supabase
+    const { error } = await supabase
       .from('lessons')
       .delete()
-      .eq(
-        'id',
-        lesson.id
-      );
+      .eq('id', lesson.id);
 
     if (error) {
-      setError(
-        error.message
-      );
+      setError(error.message);
       return;
     }
 
-    setSuccess(
-      'Aula cancelada e removida da agenda.'
-    );
-
+    setSuccess('Aula cancelada e removida da agenda.');
     await load();
   }
 
-  function openSeriesManager(
-    lesson: Lesson
-  ) {
-    if (
-      !lesson.series_id ||
-      !lesson.series
-    )
-      return;
+  function openSeriesManager(lesson: Lesson) {
+    if (!lesson.series_id || !lesson.series) return;
 
-    const d =
-      new Date(
-        lesson.starts_at
-      );
-
-    setSeriesLesson(
-      lesson
-    );
-
+    setSeriesLesson(lesson);
     setSeriesForm({
-      time:
-        localTimeValue(d),
-
-      repeatUntil:
-        lesson.series
-          .repeat_until
+      time: localTimeValue(new Date(lesson.starts_at)),
+      repeatUntil: lesson.series.repeat_until
     });
 
     setError('');
@@ -771,1357 +493,488 @@ export function Agenda({ role }: { role: string }) {
   }
 
   async function saveSeriesChanges() {
-    if (
-      !seriesLesson?.series_id ||
-      !seriesLesson.series
-    )
-      return;
+    if (!seriesLesson?.series_id || !seriesLesson.series) return;
 
     setError('');
     setSuccess('');
 
-    const current =
-      new Date(
-        seriesLesson.starts_at
-      );
+    const current = new Date(seriesLesson.starts_at);
+    const until = localDateTimeToDate(seriesForm.repeatUntil, seriesForm.time);
 
-    const newTime =
-      seriesForm.time;
-
-    const until =
-      localDateTimeToDate(
-        seriesForm.repeatUntil,
-        newTime
-      );
-
-    if (
-      Number.isNaN(
-        until.getTime()
-      ) ||
-      until < current
-    ) {
-      setError(
-        'A data final da série é inválida.'
-      );
+    if (Number.isNaN(until.getTime()) || until < current) {
+      setError('A data final da série é inválida.');
       return;
     }
 
-    /*
-     * Procuramos TODAS as aulas da série,
-     * porque agora uma série pode ter vários alunos.
-     */
-    const {
-      data: futureLessons,
-      error: futureError
-    } = await supabase
+    const { data: futureLessons, error: futureError } = await supabase
       .from('lessons')
-      .select(
-        'id,student_id,starts_at,status'
-      )
-      .eq(
-        'series_id',
-        seriesLesson.series_id
-      )
-      .gte(
-        'starts_at',
-        current.toISOString()
-      )
-      .order(
-        'starts_at'
-      );
+      .select('id,student_id,starts_at,status')
+      .eq('series_id', seriesLesson.series_id)
+      .gte('starts_at', current.toISOString())
+      .order('starts_at');
 
     if (futureError) {
-      setError(
-        futureError.message
-      );
+      setError(futureError.message);
       return;
     }
 
-    const future =
-      futureLessons || [];
+    const future = futureLessons || [];
+    const studentIds = Array.from(new Set([
+      ...future.map((x: any) => x.student_id),
+      seriesLesson.student_id
+    ]));
 
-    /*
-     * Alunos existentes na série.
-     */
-    const seriesStudentIds =
-      Array.from(
-        new Set(
-          future.map(
-            (x: any) =>
-              x.student_id
-          )
-        )
-      );
+    const newDates: Date[] = [];
+    let cursor = new Date(current);
 
-    /*
-     * Se por alguma razão a aula aberta
-     * não estiver na lista futura, garantimos
-     * que o aluno da aula atual continua incluído.
-     */
-    if (
-      !seriesStudentIds.includes(
-        seriesLesson.student_id
-      )
-    ) {
-      seriesStudentIds.push(
-        seriesLesson.student_id
-      );
-    }
+    while (cursor <= until) {
+      const next = localDateTimeToDate(localDateValue(cursor), seriesForm.time);
+      if (next >= current) newDates.push(next);
+      cursor = addDays(cursor, 7);
 
-    /*
-     * Construir novas datas.
-     */
-    const newDates: Date[] =
-      [];
-
-    let cursor =
-      new Date(current);
-
-    while (
-      cursor <= until
-    ) {
-      const next =
-        localDateTimeToDate(
-          localDateValue(cursor),
-          newTime
-        );
-
-      if (
-        next >= current
-      ) {
-        newDates.push(
-          next
-        );
-      }
-
-      cursor = addDays(
-        cursor,
-        7
-      );
-
-      if (
-        newDates.length >
-        60
-      ) {
-        setError(
-          'A série excede o limite de 60 ocorrências.'
-        );
+      if (newDates.length > 60) {
+        setError('A série excede o limite de 60 ocorrências.');
         return;
       }
     }
 
-    /*
-     * A série tem N alunos × M ocorrências.
-     */
-    const agendadas =
-      future.filter(
-        (x: any) =>
-          x.status ===
-          'agendada'
-      );
+    // Agrupar as aulas agendadas por aluno.
+    const scheduled = future.filter((x: any) => x.status === 'agendada');
 
-    /*
-     * Organizar as aulas atuais por aluno.
-     */
-    const lessonsByStudent =
-      new Map<
-        string,
-        any[]
-      >();
-
-    for (const lesson of agendadas) {
-      if (
-        !lessonsByStudent.has(
-          lesson.student_id
-        )
-      ) {
-        lessonsByStudent.set(
-          lesson.student_id,
-          []
-        );
-      }
-
-      lessonsByStudent
-        .get(
-          lesson.student_id
-        )!
-        .push(lesson);
-    }
-
-    /*
-     * Atualizar cada aluno da série.
-     */
-    for (
-      const studentId of seriesStudentIds
-    ) {
-      const studentLessons =
-        lessonsByStudent.get(
-          studentId
-        ) || [];
-
-      const keep =
-        Math.min(
-          studentLessons.length,
-          newDates.length
+    for (const studentId of studentIds) {
+      const studentLessons = scheduled
+        .filter((x: any) => x.student_id === studentId)
+        .sort((a: any, b: any) =>
+          new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
         );
 
-      /*
-       * Alterar as aulas existentes.
-       */
-      for (
-        let i = 0;
-        i < keep;
-        i++
-      ) {
-        const {
-          error
-        } = await supabase
+      const keep = Math.min(studentLessons.length, newDates.length);
+
+      for (let i = 0; i < keep; i++) {
+        const { error } = await supabase
           .from('lessons')
-          .update({
-            starts_at:
-              newDates[
-                i
-              ].toISOString()
-          })
-          .eq(
-            'id',
-            studentLessons[
-              i
-            ].id
-          );
+          .update({ starts_at: newDates[i].toISOString() })
+          .eq('id', studentLessons[i].id);
 
         if (error) {
-          setError(
-            error.message
-          );
+          setError(error.message);
           return;
         }
       }
 
-      /*
-       * Apagar ocorrências que ficaram
-       * fora da nova data final.
-       */
-      if (
-        studentLessons.length >
-        newDates.length
-      ) {
-        const extra =
-          studentLessons.slice(
-            newDates.length
-          );
+      for (const extra of studentLessons.slice(newDates.length)) {
+        const { error } = await supabase
+          .from('lessons')
+          .delete()
+          .eq('id', extra.id);
 
-        for (
-          const row of extra
-        ) {
-          const {
-            error
-          } = await supabase
-            .from('lessons')
-            .delete()
-            .eq(
-              'id',
-              row.id
-            );
-
-          if (error) {
-            setError(
-              error.message
-            );
-            return;
-          }
+        if (error) {
+          setError(error.message);
+          return;
         }
       }
 
-      /*
-       * Criar novas ocorrências caso
-       * a série tenha sido prolongada.
-       */
-      if (
-        newDates.length >
-        studentLessons.length
-      ) {
-        const rows =
-          newDates
-            .slice(
-              studentLessons.length
-            )
-            .map(
-              d => ({
-                student_id:
-                  studentId,
+      if (newDates.length > studentLessons.length) {
+        const rows = newDates.slice(studentLessons.length).map(d => ({
+          student_id: studentId,
+          teacher_id: seriesLesson.teacher_id,
+          instrument_id: seriesLesson.instrument_id,
+          series_id: seriesLesson.series_id,
+          starts_at: d.toISOString(),
+          duration_minutes: 50,
+          notes: seriesLesson.notes || null
+        }));
 
-                teacher_id:
-                  seriesLesson.teacher_id,
-
-                instrument_id:
-                  seriesLesson.instrument_id,
-
-                series_id:
-                  seriesLesson.series_id,
-
-                starts_at:
-                  d.toISOString(),
-
-                duration_minutes:
-                  50,
-
-                notes:
-                  seriesLesson.notes ||
-                  null
-              })
-            );
-
-        const {
-          error
-        } = await supabase
-          .from('lessons')
-          .insert(
-            rows
-          );
+        const { error } = await supabase.from('lessons').insert(rows);
 
         if (error) {
-          setError(
-            error.message
-          );
+          setError(error.message);
           return;
         }
       }
     }
 
-    /*
-     * Atualizar os dados gerais da série.
-     */
-    const {
-      error: seriesError
-    } = await supabase
+    const { error: seriesError } = await supabase
       .from('lesson_series')
       .update({
-        repeat_until:
-          seriesForm.repeatUntil,
-
-        start_time:
-          newTime,
-
+        repeat_until: seriesForm.repeatUntil,
+        start_time: seriesForm.time,
         active: true
       })
-      .eq(
-        'id',
-        seriesLesson.series_id
-      );
+      .eq('id', seriesLesson.series_id);
 
     if (seriesError) {
-      setError(
-        seriesError.message
-      );
+      setError(seriesError.message);
       return;
     }
 
-    setSeriesLesson(
-      null
-    );
-
-    setSuccess(
-      'Série atualizada para todos os alunos.'
-    );
-
+    setSeriesLesson(null);
+    setSuccess('Série atualizada para todos os alunos.');
     await load();
   }
 
-  async function cancelSeries(
-    targetLesson?: Lesson
-  ) {
-    const target =
-      targetLesson ||
-      seriesLesson;
+  async function cancelSeries(targetLesson?: Lesson) {
+    const target = targetLesson || seriesLesson;
+    if (!target?.series_id) return;
 
-    if (
-      !target?.series_id
-    )
-      return;
-
-    const ok =
-      window.confirm(
-        'Cancelar esta série a partir de hoje? As aulas futuras serão canceladas e as aulas já realizadas ficam intactas.'
-      );
+    const ok = window.confirm(
+      'Cancelar esta série a partir de hoje? As aulas futuras serão removidas e as aulas passadas ficam intactas.'
+    );
 
     if (!ok) return;
 
     setError('');
     setSuccess('');
 
-    const {
-      error: lessonsError
-    } = await supabase
+    const { error: lessonsError } = await supabase
       .from('lessons')
       .delete()
-      .eq(
-        'series_id',
-        target.series_id
-      )
-      .gte(
-        'starts_at',
-        new Date().toISOString()
-      );
+      .eq('series_id', target.series_id)
+      .gte('starts_at', new Date().toISOString());
 
     if (lessonsError) {
-      setError(
-        lessonsError.message
-      );
+      setError(lessonsError.message);
       return;
     }
 
-    const {
-      error: seriesError
-    } = await supabase
+    const { error: seriesError } = await supabase
       .from('lesson_series')
-      .update({
-        active: false
-      })
-      .eq(
-        'id',
-        target.series_id
-      );
+      .update({ active: false })
+      .eq('id', target.series_id);
 
     if (seriesError) {
-      setError(
-        seriesError.message
-      );
+      setError(seriesError.message);
       return;
     }
 
-    setSeriesLesson(
-      null
-    );
-
-    setSuccess(
-      'Série cancelada a partir de agora.'
-    );
-
+    setSeriesLesson(null);
+    setSuccess('Série cancelada a partir de agora.');
     await load();
   }
 
-  const fullAgendaDays =
-    useMemo(() => {
-      const groups: Record<
-        string,
-        Lesson[]
-      > = {};
+  const fullAgendaDays = useMemo(() => {
+    const groups: Record<string, Lesson[]> = {};
 
-      lessons.forEach(
-        lesson => {
-          const d =
-            new Date(
-              lesson.starts_at
-            );
+    lessons.forEach(lesson => {
+      const key = localDateValue(new Date(lesson.starts_at));
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(lesson);
+    });
 
-          const key =
-            localDateValue(d);
-
-          if (!groups[key]) {
-            groups[key] = [];
-          }
-
-          groups[key].push(
-            lesson
-          );
-        }
-      );
-
-      return Object.entries(
-        groups
-      )
-        .sort(
-          ([a], [b]) =>
-            a.localeCompare(b)
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, dayLessons]) => ({
+        date,
+        lessons: dayLessons.sort(
+          (a, b) =>
+            new Date(a.starts_at).getTime() -
+            new Date(b.starts_at).getTime()
         )
-        .map(
-          ([
-            date,
-            dayLessons
-          ]) => ({
-            date,
-            lessons:
-              dayLessons.sort(
-                (a, b) =>
-                  new Date(
-                    a.starts_at
-                  ).getTime() -
-                  new Date(
-                    b.starts_at
-                  ).getTime()
-              )
-          })
-        );
-    }, [lessons]);
+      }));
+  }, [lessons]);
 
-  const days =
-    Array.from(
-      { length: 7 },
-      (_, i) =>
-        addDays(
-          monday,
-          i
-        )
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+
+  function renderLesson(lesson: Lesson) {
+    return (
+      <div
+        className="lessonCard"
+        key={lesson.id}
+        style={{
+          display: 'grid',
+          gap: 4,
+          opacity: lesson.status === 'cancelada' ? 0.55 : 1
+        }}
+      >
+        <b>{fmtTime(lesson.starts_at)}</b>
+        <span>{studentName(lesson)}</span>
+        <small>Professor: {teacherName(lesson)}</small>
+
+        {lesson.status !== 'cancelada' && role !== 'aluno_encarregado' && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {lesson.series_id && lesson.series?.active && (
+              <>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ padding: '4px 8px', fontSize: 12 }}
+                  onClick={() => openSeriesManager(lesson)}
+                >
+                  Gerir série
+                </button>
+
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ padding: '4px 8px', fontSize: 12 }}
+                  onClick={() => cancelSeries(lesson)}
+                >
+                  Cancelar série
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ padding: '4px 8px', fontSize: 12 }}
+              onClick={() => cancelLesson(lesson)}
+            >
+              Cancelar aula
+            </button>
+          </div>
+        )}
+      </div>
     );
+  }
 
   return (
     <section className="section">
       <div className="agendaToolbar">
         <div>
-          <div className="eyebrow">
-            Agenda
-          </div>
-
-          <h2
-            style={{
-              margin:
-                '6px 0 4px'
-            }}
-          >
-            Semana de{' '}
-            {fmtDate(monday)}
+          <div className="eyebrow">Agenda</div>
+          <h2 style={{ margin: '6px 0 4px' }}>
+            Semana de {fmtDate(monday)}
           </h2>
-
           <div className="muted">
             Aulas de 50 minutos ·{' '}
-            {role ===
-            'administrador'
+            {role === 'administrador'
               ? 'visão global'
-              : role ===
-                'professor'
+              : role === 'professor'
                 ? 'a tua agenda'
                 : 'as tuas aulas'}
           </div>
         </div>
 
         <div className="agendaActions">
-          <button
-            className="btn ghost"
-            onClick={() =>
-              move(-1)
-            }
-          >
-            ←
+          <button className="btn ghost" onClick={() => move(-1)}>←</button>
+          <button className="btn ghost" onClick={() => setWeek(startOfWeek(new Date()))}>Hoje</button>
+          <button className="btn ghost" onClick={() => move(1)}>→</button>
+          <button className="btn ghost" onClick={() => setShowFullAgenda(!showFullAgenda)}>
+            {showFullAgenda ? 'Vista semanal' : 'Agenda completa'}
           </button>
 
-          <button
-            className="btn ghost"
-            onClick={() =>
-              setWeek(
-                startOfWeek(
-                  new Date()
-                )
-              )
-            }
-          >
-            Hoje
-          </button>
-
-          <button
-            className="btn ghost"
-            onClick={() =>
-              move(1)
-            }
-          >
-            →
-          </button>
-
-          <button
-            className="btn ghost"
-            onClick={() =>
-              setShowFullAgenda(
-                !showFullAgenda
-              )
-            }
-          >
-            {showFullAgenda
-              ? 'Vista semanal'
-              : 'Agenda completa'}
-          </button>
-
-          {role !==
-            'aluno_encarregado' && (
-            <button
-              className="btn primary"
-              onClick={
-                openNew
-              }
-            >
-              + Nova aula
-            </button>
+          {role !== 'aluno_encarregado' && (
+            <button className="btn primary" onClick={openNew}>+ Nova aula</button>
           )}
         </div>
       </div>
 
-      {error && (
-        <div className="error">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="success">
-          {success}
-        </div>
-      )}
+      {error && <div className="error">{error}</div>}
+      {success && <div className="success">{success}</div>}
 
       {showFullAgenda ? (
-        <div
-          className="fullAgenda"
-          style={{
-            display:
-              'grid',
-            gap: 12
-          }}
-        >
-          {fullAgendaDays.length ===
-            0 && (
-            <div className="emptyDay">
-              Sem aulas agendadas.
-            </div>
+        <div className="fullAgenda" style={{ display: 'grid', gap: 12 }}>
+          {fullAgendaDays.length === 0 && (
+            <div className="emptyDay">Sem aulas agendadas.</div>
           )}
 
-          {fullAgendaDays.map(
-            day => (
-              <div
-                className="sectionCard"
-                key={day.date}
-              >
-                <div
-                  className="dayHead"
-                  style={{
-                    marginBottom:
-                      8
-                  }}
-                >
-                  <strong>
-                    {new Intl.DateTimeFormat(
-                      'pt-PT',
-                      {
-                        weekday:
-                          'long',
-                        day: '2-digit',
-                        month:
-                          '2-digit',
-                        year: 'numeric'
-                      }
-                    ).format(
-                      new Date(
-                        `${day.date}T12:00:00`
-                      )
-                    )}
-                  </strong>
-
-                  <span>
-                    {
-                      day.lessons
-                        .length
-                    }{' '}
-                    {day.lessons
-                      .length ===
-                    1
-                      ? 'aula'
-                      : 'aulas'}
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display:
-                      'grid',
-                    gap: 8
-                  }}
-                >
-                  {day.lessons.map(
-                    l => (
-                      <div
-                        className="lessonCard"
-                        key={l.id}
-                        style={{
-                          display:
-                            'grid',
-                          gap: 3,
-                          opacity:
-                            l.status ===
-                            'cancelada'
-                              ? 0.55
-                              : 1
-                        }}
-                      >
-                        <b>
-                          {fmtTime(
-                            l.starts_at
-                          )}
-                        </b>
-
-                        <span>
-                          {l.student
-                            ?.profile
-                            ?.full_name ||
-                            'Aluno'}
-                        </span>
-
-                        <small>
-                          {l
-                            .instrument
-                            ?.name ||
-                            'Instrumento'}{' '}
-                          ·{' '}
-                          {l
-                            .teacher
-                            ?.profile
-                            ?.full_name ||
-                            'Professor'}
-                        </small>
-
-                        <em>
-                          {l.status}
-                        </em>
-
-                        {l.status !==
-                          'cancelada' &&
-                          role !==
-                            'aluno_encarregado' && (
-                            <div
-                              style={{
-                                display:
-                                  'flex',
-                                gap: 6,
-                                flexWrap:
-                                  'wrap',
-                                marginTop:
-                                  6
-                              }}
-                            >
-                              {l.series_id &&
-                                l
-                                  .series
-                                  ?.active && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="btn ghost"
-                                      style={{
-                                        padding:
-                                          '4px 8px',
-                                        fontSize:
-                                          12
-                                      }}
-                                      onClick={() =>
-                                        openSeriesManager(
-                                          l
-                                        )
-                                      }
-                                    >
-                                      Gerir série
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className="btn ghost"
-                                      style={{
-                                        padding:
-                                          '4px 8px',
-                                        fontSize:
-                                          12
-                                      }}
-                                      onClick={() =>
-                                        cancelSeries(
-                                          l
-                                        )
-                                      }
-                                    >
-                                      Cancelar série
-                                    </button>
-                                  </>
-                                )}
-
-                              <button
-                                type="button"
-                                className="btn ghost"
-                                style={{
-                                  padding:
-                                    '4px 8px',
-                                  fontSize:
-                                    12
-                                }}
-                                onClick={() =>
-                                  cancelLesson(
-                                    l
-                                  )
-                                }
-                              >
-                                Cancelar aula
-                              </button>
-                            </div>
-                          )}
-                      </div>
-                    )
-                  )}
-                </div>
+          {fullAgendaDays.map(day => (
+            <div className="sectionCard" key={day.date}>
+              <div className="dayHead" style={{ marginBottom: 8 }}>
+                <strong>
+                  {new Intl.DateTimeFormat('pt-PT', {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  }).format(new Date(`${day.date}T12:00:00`))}
+                </strong>
+                <span>
+                  {day.lessons.length} {day.lessons.length === 1 ? 'aula' : 'aulas'}
+                </span>
               </div>
-            )
-          )}
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                {day.lessons.map(renderLesson)}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="agendaGrid">
-          {days.map(
-            d => (
-              <div
-                className="dayCol"
-                key={d.toISOString()}
-              >
+          {days.map(d => {
+            const dayLessons = weekLessons.filter(l => {
+              const x = new Date(l.starts_at);
+              return localDateValue(x) === localDateValue(d);
+            });
+
+            return (
+              <div className="dayCol" key={localDateValue(d)}>
                 <div className="dayHead">
                   <strong>
-                    {new Intl.DateTimeFormat(
-                      'pt-PT',
-                      {
-                        weekday:
-                          'short'
-                      }
-                    ).format(d)}
+                    {new Intl.DateTimeFormat('pt-PT', { weekday: 'short' }).format(d)}
                   </strong>
-
                   <span>
-                    {new Intl.DateTimeFormat(
-                      'pt-PT',
-                      {
-                        day: '2-digit',
-                        month:
-                          '2-digit'
-                      }
-                    ).format(d)}
+                    {new Intl.DateTimeFormat('pt-PT', {
+                      day: '2-digit',
+                      month: '2-digit'
+                    }).format(d)}
                   </span>
                 </div>
 
-                {weekLessons
-                  .filter(
-                    l => {
-                      const x =
-                        new Date(
-                          l.starts_at
-                        );
-
-                      return (
-                        x.getDate() ===
-                          d.getDate() &&
-                        x.getMonth() ===
-                          d.getMonth()
-                      );
-                    }
-                  )
-                  .map(
-                    l => (
-                      <div
-                        className="lessonCard"
-                        key={l.id}
-                        style={{
-                          opacity:
-                            l.status ===
-                            'cancelada'
-                              ? 0.55
-                              : 1
-                        }}
-                      >
-                        <b>
-                          {fmtTime(
-                            l.starts_at
-                          )}
-                        </b>
-
-                        <span>
-                          {l.student
-                            ?.profile
-                            ?.full_name ||
-                            'Aluno'}
-                        </span>
-
-                        <small>
-                          {l
-                            .instrument
-                            ?.name ||
-                            'Instrumento'}{' '}
-                          ·{' '}
-                          {l
-                            .teacher
-                            ?.profile
-                            ?.full_name ||
-                            'Professor'}
-                        </small>
-
-                        <em>
-                          {l.status}
-                        </em>
-
-                        {l.status !==
-                          'cancelada' &&
-                          role !==
-                            'aluno_encarregado' && (
-                            <div
-                              style={{
-                                display:
-                                  'flex',
-                                gap: 6,
-                                flexWrap:
-                                  'wrap',
-                                marginTop:
-                                  6
-                              }}
-                            >
-                              {l.series_id &&
-                                l
-                                  .series
-                                  ?.active && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="btn ghost"
-                                      style={{
-                                        padding:
-                                          '4px 8px',
-                                        fontSize:
-                                          12
-                                      }}
-                                      onClick={() =>
-                                        openSeriesManager(
-                                          l
-                                        )
-                                      }
-                                    >
-                                      Gerir série
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className="btn ghost"
-                                      style={{
-                                        padding:
-                                          '4px 8px',
-                                        fontSize:
-                                          12
-                                      }}
-                                      onClick={() =>
-                                        cancelSeries(
-                                          l
-                                        )
-                                      }
-                                    >
-                                      Cancelar série
-                                    </button>
-                                  </>
-                                )}
-
-                              <button
-                                type="button"
-                                className="btn ghost"
-                                style={{
-                                  padding:
-                                    '4px 8px',
-                                  fontSize:
-                                    12
-                                }}
-                                onClick={() =>
-                                  cancelLesson(
-                                    l
-                                  )
-                                }
-                              >
-                                Cancelar aula
-                              </button>
-                            </div>
-                          )}
-                      </div>
-                    )
-                  )}
-
-                {!weekLessons.some(
-                  l => {
-                    const x =
-                      new Date(
-                        l.starts_at
-                      );
-
-                    return (
-                      x.getDate() ===
-                        d.getDate() &&
-                      x.getMonth() ===
-                        d.getMonth()
-                    );
-                  }
-                ) && (
-                  <div className="emptyDay">
-                    Sem aulas
-                  </div>
-                )}
+                {dayLessons.length
+                  ? dayLessons.map(renderLesson)
+                  : <div className="emptyDay">Sem aulas</div>}
               </div>
-            )
-          )}
+            );
+          })}
         </div>
       )}
 
       {loading && (
-        <div
-          className="muted"
-          style={{
-            marginTop: 12
-          }}
-        >
+        <div className="muted" style={{ marginTop: 12 }}>
           A carregar…
         </div>
       )}
 
       {showAdd && (
         <div className="modalBackdrop">
-          <form
-            className="modalCard"
-            onSubmit={addLesson}
-          >
+          <form className="modalCard" onSubmit={addLesson}>
             <div className="dashHead">
               <div>
-                <div className="eyebrow">
-                  Nova aula
-                </div>
-
-                <h3
-                  style={{
-                    margin:
-                      '6px 0'
-                  }}
-                >
-                  Agendar aula
-                </h3>
+                <div className="eyebrow">Nova aula</div>
+                <h3 style={{ margin: '6px 0' }}>Agendar aula</h3>
               </div>
-
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() =>
-                  setShowAdd(
-                    false
-                  )
-                }
+                onClick={() => setShowAdd(false)}
               >
                 Fechar
               </button>
             </div>
 
             <div className="field">
-              <label>
-                Alunos
-              </label>
-
+              <label>Alunos</label>
               <div
                 style={{
-                  display:
-                    'grid',
+                  display: 'grid',
                   gap: 8,
-                  maxHeight:
-                    220,
-                  overflowY:
-                    'auto',
+                  maxHeight: 220,
+                  overflowY: 'auto',
                   padding: 10,
-                  border:
-                    '1px solid rgba(255,255,255,.12)',
-                  borderRadius:
-                    10
+                  border: '1px solid rgba(255,255,255,.12)',
+                  borderRadius: 10
                 }}
               >
-                {students.map(
-                  o => (
-                    <label
-                      key={o.id}
-                      style={{
-                        display:
-                          'flex',
-                        alignItems:
-                          'center',
-                        gap: 8,
-                        cursor:
-                          'pointer'
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.student_ids.includes(
-                          o.id
-                        )}
-                        onChange={() =>
-                          setForm({
-                            ...form,
-
-                            student_ids:
-                              form.student_ids.includes(
-                                o.id
-                              )
-                                ? form.student_ids.filter(
-                                    id =>
-                                      id !==
-                                      o.id
-                                  )
-                                : [
-                                    ...form.student_ids,
-                                    o.id
-                                  ]
-                          })
-                        }
-                      />
-
-                      {o.name}
-                    </label>
-                  )
-                )}
+                {students.map(o => (
+                  <label
+                    key={o.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.student_ids.includes(o.id)}
+                      onChange={() => toggleStudent(o.id)}
+                    />
+                    {o.name}
+                  </label>
+                ))}
               </div>
-
               <small className="muted">
-                Podes selecionar vários
-                alunos para a mesma aula
-                e horário.
+                Seleciona todos os alunos que vão partilhar o horário.
               </small>
-
-              {form.student_ids.length >
-                0 && (
-                <small
-                  className="muted"
-                  style={{
-                    display:
-                      'block',
-                    marginTop:
-                      6
-                  }}
-                >
-                  {form.student_ids.length}{' '}
-                  aluno
-                  {form.student_ids.length ===
-                  1
-                    ? ''
-                    : 's'}{' '}
-                  selecionado
-                  {form.student_ids.length ===
-                  1
-                    ? ''
-                    : 's'}.
+              {form.student_ids.length > 0 && (
+                <small className="muted">
+                  {form.student_ids.length} aluno(s) selecionado(s).
                 </small>
               )}
             </div>
 
             <div className="field">
-              <label>
-                Professor
-              </label>
-
+              <label>Professor</label>
               <select
-                value={
-                  form.teacher_id
-                }
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    teacher_id:
-                      e.target
-                        .value
-                  })
-                }
+                value={form.teacher_id}
+                onChange={e => setForm({ ...form, teacher_id: e.target.value })}
               >
-                <option value="">
-                  Selecionar…
-                </option>
-
-                {teachers.map(
-                  o => (
-                    <option
-                      key={o.id}
-                      value={o.id}
-                    >
-                      {o.name}
-                    </option>
-                  )
-                )}
+                <option value="">Selecionar…</option>
+                {teachers.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
               </select>
             </div>
 
             <div className="field">
-              <label>
-                Instrumento
-              </label>
-
+              <label>Instrumento</label>
               <select
-                value={
-                  form.instrument_id
-                }
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    instrument_id:
-                      e.target
-                        .value
-                  })
-                }
+                value={form.instrument_id}
+                onChange={e => setForm({ ...form, instrument_id: e.target.value })}
               >
-                <option value="">
-                  Selecionar…
-                </option>
-
-                {instruments.map(
-                  o => (
-                    <option
-                      key={o.id}
-                      value={o.id}
-                    >
-                      {o.name}
-                    </option>
-                  )
-                )}
+                <option value="">Selecionar…</option>
+                {instruments.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
               </select>
             </div>
 
             <div className="field">
-              <label>
-                Data
-              </label>
-
+              <label>Data</label>
               <input
                 type="date"
-                value={
-                  form.date
-                }
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    date:
-                      e.target
-                        .value
-                  })
-                }
+                value={form.date}
+                onChange={e => setForm({ ...form, date: e.target.value })}
               />
             </div>
 
             <div className="field">
-              <label>
-                Hora
-              </label>
-
+              <label>Hora</label>
               <input
                 type="time"
-                value={
-                  form.time
-                }
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    time:
-                      e.target
-                        .value
-                  })
-                }
+                value={form.time}
+                onChange={e => setForm({ ...form, time: e.target.value })}
                 step={300}
               />
             </div>
 
             <div className="field">
-              <label
-                style={{
-                  display:
-                    'flex',
-                  alignItems:
-                    'center',
-                  gap: 8,
-                  cursor:
-                    'pointer'
-                }}
-              >
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
-                  checked={
-                    form.repeatWeekly
-                  }
-                  onChange={e =>
-                    setForm({
-                      ...form,
-                      repeatWeekly:
-                        e.target
-                          .checked,
-
-                      repeatUntil:
-                        e.target
-                          .checked
-                          ? form.repeatUntil ||
-                            academicYearEnd(
-                              form.date
-                            )
-                          : form.repeatUntil
-                    })
-                  }
+                  checked={form.repeatWeekly}
+                  onChange={e => setForm({
+                    ...form,
+                    repeatWeekly: e.target.checked,
+                    repeatUntil: e.target.checked
+                      ? form.repeatUntil || academicYearEnd(form.date)
+                      : form.repeatUntil
+                  })}
                 />
-
                 Repetir semanalmente
-                até julho
               </label>
             </div>
 
             {form.repeatWeekly && (
               <div className="field">
-                <label>
-                  Repetir até
-                </label>
-
+                <label>Repetir até</label>
                 <input
                   type="date"
-                  value={
-                    form.repeatUntil
-                  }
-                  min={
-                    form.date
-                  }
-                  onChange={e =>
-                    setForm({
-                      ...form,
-                      repeatUntil:
-                        e.target
-                          .value
-                    })
-                  }
+                  value={form.repeatUntil}
+                  min={form.date}
+                  onChange={e => setForm({ ...form, repeatUntil: e.target.value })}
                 />
-
                 <small className="muted">
-                  Por defeito, fica até
-                  31 de julho do ano
-                  letivo. Tu ou o
-                  professor podem
-                  alterar ou cancelar a
-                  série mais tarde.
+                  A série será criada para todos os alunos selecionados.
                 </small>
               </div>
             )}
 
             <div className="field">
-              <label>
-                Notas
-              </label>
-
+              <label>Notas</label>
               <textarea
                 rows={3}
-                value={
-                  form.notes
-                }
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    notes:
-                      e.target
-                        .value
-                  })
-                }
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
               />
             </div>
 
-            <button
-              className="btn primary"
-              type="submit"
-            >
-              {form.repeatWeekly
-                ? 'Criar série'
-                : 'Criar aula'}
+            <button className="btn primary" type="submit" disabled={saving}>
+              {saving ? 'A guardar…' : form.repeatWeekly ? 'Criar série' : 'Criar aula'}
             </button>
           </form>
         </div>
@@ -2132,122 +985,47 @@ export function Agenda({ role }: { role: string }) {
           <div className="modalCard">
             <div className="dashHead">
               <div>
-                <div className="eyebrow">
-                  Série semanal
-                </div>
-
-                <h3
-                  style={{
-                    margin:
-                      '6px 0'
-                  }}
-                >
-                  Gerir aulas seguintes
-                </h3>
+                <div className="eyebrow">Série semanal</div>
+                <h3 style={{ margin: '6px 0' }}>Gerir aulas seguintes</h3>
               </div>
-
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() =>
-                  setSeriesLesson(
-                    null
-                  )
-                }
+                onClick={() => setSeriesLesson(null)}
               >
                 Fechar
               </button>
             </div>
 
-            <div
-              className="muted"
-              style={{
-                marginBottom:
-                  12
-              }}
-            >
-              Altera a hora ou
-              prolonga/encurta a série.
-              Todos os alunos da série
-              acompanham a alteração.
-              O passado mantém-se
-              intacto.
+            <div className="muted" style={{ marginBottom: 12 }}>
+              As alterações à série aplicam-se aos alunos associados.
             </div>
 
             <div className="field">
-              <label>
-                Hora semanal
-              </label>
-
+              <label>Hora semanal</label>
               <input
                 type="time"
-                value={
-                  seriesForm.time
-                }
-                onChange={e =>
-                  setSeriesForm({
-                    ...seriesForm,
-                    time:
-                      e.target
-                        .value
-                  })
-                }
+                value={seriesForm.time}
+                onChange={e => setSeriesForm({ ...seriesForm, time: e.target.value })}
                 step={300}
               />
             </div>
 
             <div className="field">
-              <label>
-                Repetir até
-              </label>
-
+              <label>Repetir até</label>
               <input
                 type="date"
-                value={
-                  seriesForm.repeatUntil
-                }
-                min={localDateValue(
-                  new Date(
-                    seriesLesson.starts_at
-                  )
-                )}
-                onChange={e =>
-                  setSeriesForm({
-                    ...seriesForm,
-                    repeatUntil:
-                      e.target
-                        .value
-                  })
-                }
+                value={seriesForm.repeatUntil}
+                min={localDateValue(new Date(seriesLesson.starts_at))}
+                onChange={e => setSeriesForm({ ...seriesForm, repeatUntil: e.target.value })}
               />
             </div>
 
-            <div
-              style={{
-                display:
-                  'flex',
-                gap: 8,
-                flexWrap:
-                  'wrap'
-              }}
-            >
-              <button
-                className="btn primary"
-                type="button"
-                onClick={
-                  saveSeriesChanges
-                }
-              >
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn primary" type="button" onClick={saveSeriesChanges}>
                 Guardar alterações
               </button>
-
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={() =>
-                  cancelSeries()
-                }
-              >
+              <button className="btn ghost" type="button" onClick={() => cancelSeries()}>
                 Cancelar série
               </button>
             </div>

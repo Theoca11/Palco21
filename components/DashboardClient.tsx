@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -7,6 +8,7 @@ import { Agenda } from './Agenda';
 import { People } from './People';
 import { Reschedules } from './Reschedules';
 import { Finance } from './Finance';
+import { TeacherFinance } from './TeacherFinance';
 import { Leads } from './Leads';
 import { Notifications } from './Notifications';
 import { AdminUsers } from './AdminUsers';
@@ -26,28 +28,32 @@ type Lesson = {
   teacher_id: string;
   instrument?: { name: string } | null;
   student?: { full_name: string | null } | null;
-  teacher?: { profile?: { full_name: string | null } | null } | null;
+  teacher?: {
+    profile?: { full_name: string | null } | null;
+  } | null;
 };
 
-const fmtTime = (s: string) =>
+const fmtTime = (value: string) =>
   new Intl.DateTimeFormat('pt-PT', {
     hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(s));
+    minute: '2-digit',
+  }).format(new Date(value));
 
-const fmtDate = (s: string) =>
+const fmtDate = (value: string) =>
   new Intl.DateTimeFormat('pt-PT', {
     day: '2-digit',
-    month: '2-digit'
-  }).format(new Date(s));
+    month: '2-digit',
+  }).format(new Date(value));
 
 function todayBounds() {
   const now = new Date();
+
   const start = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate()
   );
+
   const end = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -56,13 +62,13 @@ function todayBounds() {
 
   return {
     start: start.toISOString(),
-    end: end.toISOString()
+    end: end.toISOString(),
   };
 }
 
 export function DashboardClient({
   name,
-  role
+  role,
 }: {
   name: string;
   role: string;
@@ -79,118 +85,124 @@ export function DashboardClient({
   const [error, setError] = useState('');
 
   async function logout() {
-    await createClient().auth.signOut();
+    await supabase.auth.signOut();
     router.push('/login');
+    router.refresh();
   }
 
   async function loadSummary() {
     setLoading(true);
     setError('');
 
-    const { start, end } = todayBounds();
+    try {
+      const { start, end } = todayBounds();
 
-    const qs: any[] = [
-      supabase
-        .from('lessons')
-        .select(
-          'id,starts_at,student_id,teacher_id,instrument:instruments(name),student:students(full_name),teacher:teachers(profile:profiles(full_name))'
-        )
-        .gte('starts_at', start)
-        .lt('starts_at', end)
-        .order('starts_at'),
-
-      supabase
-        .from('reschedule_requests')
-        .select('id,status')
-        .eq('status', 'pendente')
-    ];
-
-    if (role === 'administrador') {
-      qs.push(
+      const queries: Promise<any>[] = [
         supabase
-          .from('monthly_payments')
+          .from('lessons')
+          .select(
+            'id,starts_at,student_id,teacher_id,instrument:instruments(name),student:students(full_name),teacher:teachers(profile:profiles(full_name))'
+          )
+          .gte('starts_at', start)
+          .lt('starts_at', end)
+          .order('starts_at'),
+
+        supabase
+          .from('reschedule_requests')
           .select('id,status')
-          .eq('status', 'pendente')
-      );
+          .eq('status', 'pendente'),
+      ];
 
-      qs.push(
-        supabase
-          .from('leads')
-          .select('id,funnel_stage')
-          .in('funnel_stage', [
-            'visit',
-            'interest',
-            'form_started',
-            'form_contact'
-          ])
-      );
+      if (role === 'administrador') {
+        queries.push(
+          supabase
+            .from('monthly_payments')
+            .select('id,status')
+            .eq('status', 'pendente')
+        );
 
-      qs.push(
-        supabase
-          .from('students')
-          .select('id')
-          .eq('status', 'ativo')
+        queries.push(
+          supabase
+            .from('leads')
+            .select('id,funnel_stage')
+            .in('funnel_stage', [
+              'visit',
+              'interest',
+              'form_started',
+              'form_contact',
+            ])
+        );
+
+        queries.push(
+          supabase
+            .from('students')
+            .select('id')
+            .eq('status', 'ativo')
+        );
+      } else if (role === 'aluno_encarregado') {
+        queries.push(
+          supabase
+            .from('monthly_payments')
+            .select('id,status')
+            .eq('status', 'pendente')
+        );
+      }
+
+      const results = await Promise.all(queries);
+      const lessonsResult = results[0];
+      const reschedulesResult = results[1];
+
+      if (lessonsResult.error) {
+        throw lessonsResult.error;
+      }
+
+      if (reschedulesResult.error) {
+        throw reschedulesResult.error;
+      }
+
+      setLessons((lessonsResult.data || []) as Lesson[]);
+      setPendingRebooks(reschedulesResult.data?.length || 0);
+
+      if (role === 'administrador') {
+        const paymentsResult = results[2];
+        const leadsResult = results[3];
+        const studentsResult = results[4];
+
+        if (paymentsResult.error) throw paymentsResult.error;
+        if (leadsResult.error) throw leadsResult.error;
+        if (studentsResult.error) throw studentsResult.error;
+
+        setOverdue(paymentsResult.data?.length || 0);
+        setNewLeads(leadsResult.data?.length || 0);
+        setActiveStudents(studentsResult.data?.length || 0);
+      } else if (role === 'aluno_encarregado') {
+        const paymentsResult = results[2];
+
+        if (paymentsResult.error) throw paymentsResult.error;
+
+        setOverdue(paymentsResult.data?.length || 0);
+      } else {
+        setOverdue(0);
+        setNewLeads(0);
+        setActiveStudents(0);
+      }
+    } catch (err: any) {
+      setError(
+        err?.message || 'Não foi possível carregar o resumo do dashboard.'
       );
-    } else if (role === 'aluno_encarregado') {
-      qs.push(
-        supabase
-          .from('monthly_payments')
-          .select('id,status')
-          .eq('status', 'pendente')
-      );
+    } finally {
+      setLoading(false);
     }
-
-    const rs = await Promise.all(qs);
-    const a = rs[0];
-    const r = rs[1];
-
-    if (a.error) {
-      setError(a.error.message);
-    } else {
-      setLessons((a.data || []) as Lesson[]);
-    }
-
-    if (r.error) {
-      setError(x => x || r.error.message);
-    } else {
-      setPendingRebooks(r.data?.length || 0);
-    }
-
-    if (role === 'administrador') {
-      const p = rs[2];
-      const l = rs[3];
-      const s = rs[4];
-
-      setOverdue(
-        p.error ? 0 : p.data?.length || 0
-      );
-
-      setNewLeads(
-        l.error ? 0 : l.data?.length || 0
-      );
-
-      setActiveStudents(
-        s.error ? 0 : s.data?.length || 0
-      );
-    } else if (role === 'aluno_encarregado') {
-      const p = rs[2];
-
-      setOverdue(
-        p.error ? 0 : p.data?.length || 0
-      );
-    }
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    loadSummary();
+    void loadSummary();
   }, [role]);
 
   const labels: Record<string, string> = {
     administrador: 'Administrador',
     professor: 'Professor',
-    aluno_encarregado: 'Aluno / Encarregado'
+    aluno_encarregado: 'Aluno / Encarregado',
   };
 
   const heading =
@@ -204,7 +216,7 @@ export function DashboardClient({
     role === 'administrador'
       ? 'Tudo o que merece atenção hoje, num único ecrã.'
       : role === 'professor'
-        ? 'Agenda e tarefas prioritárias para hoje.'
+        ? 'Agenda, tarefas e informação financeira.'
         : 'As tuas aulas e assuntos importantes.';
 
   const metrics = useMemo<Metric[]>(() => {
@@ -213,26 +225,26 @@ export function DashboardClient({
         {
           label: 'Aulas hoje',
           value: String(lessons.length),
-          hint: 'Na escola hoje'
+          hint: 'Na escola hoje',
         },
         {
           label: 'Remarcações',
           value: String(pendingRebooks),
           hint: 'Pedidos pendentes',
-          tone: pendingRebooks ? 'warn' : 'ok'
+          tone: pendingRebooks ? 'warn' : 'ok',
         },
         {
           label: 'Pagamentos em falta',
           value: String(overdue),
           hint: 'Mensalidades pendentes',
-          tone: overdue ? 'warn' : 'ok'
+          tone: overdue ? 'warn' : 'ok',
         },
         {
           label: 'Leads ativos',
           value: String(newLeads),
           hint: 'Ainda por converter',
-          tone: newLeads ? 'warn' : 'ok'
-        }
+          tone: newLeads ? 'warn' : 'ok',
+        },
       ];
     }
 
@@ -241,30 +253,28 @@ export function DashboardClient({
         {
           label: 'Aulas hoje',
           value: String(lessons.length),
-          hint: 'A tua agenda'
+          hint: 'A tua agenda',
         },
         {
           label: 'Remarcações',
           value: String(pendingRebooks),
-          hint: 'À tua espera',
-          tone: pendingRebooks ? 'warn' : 'ok'
+          hint: 'Pedidos pendentes',
+          tone: pendingRebooks ? 'warn' : 'ok',
         },
         {
           label: 'Primeira aula',
-          value: lessons[0]
-            ? fmtTime(lessons[0].starts_at)
-            : '—',
+          value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
           hint: lessons[0]
             ? `Aluno ${lessons[0].student?.full_name || ''}`
-            : 'Sem aulas hoje'
+            : 'Sem aulas hoje',
         },
         {
           label: 'Última aula',
-          value: lessons.at(-1)
-            ? fmtTime(lessons.at(-1)!.starts_at)
+          value: lessons.length
+            ? fmtTime(lessons[lessons.length - 1].starts_at)
             : '—',
-          hint: 'Fim do dia'
-        }
+          hint: 'Fim do dia',
+        },
       ];
     }
 
@@ -272,7 +282,7 @@ export function DashboardClient({
       {
         label: 'Aulas hoje',
         value: String(lessons.length),
-        hint: 'As tuas aulas'
+        hint: 'As tuas aulas',
       },
       {
         label: 'Pagamento',
@@ -280,30 +290,20 @@ export function DashboardClient({
         hint: overdue
           ? 'Há uma mensalidade pendente'
           : 'Sem pendências',
-        tone: overdue ? 'warn' : 'ok'
+        tone: overdue ? 'warn' : 'ok',
       },
       {
         label: 'Próxima aula',
-        value: lessons[0]
-          ? fmtTime(lessons[0].starts_at)
-          : '—',
-        hint:
-          lessons[0]?.instrument?.name ||
-          'Sem aulas hoje'
+        value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
+        hint: lessons[0]?.instrument?.name || 'Sem aulas hoje',
       },
       {
         label: 'Pedidos',
         value: String(pendingRebooks),
-        hint: 'Remarcações em análise'
-      }
+        hint: 'Remarcações em análise',
+      },
     ];
-  }, [
-    role,
-    lessons,
-    pendingRebooks,
-    overdue,
-    newLeads
-  ]);
+  }, [role, lessons, pendingRebooks, overdue, newLeads]);
 
   return (
     <main className="dash">
@@ -322,22 +322,15 @@ export function DashboardClient({
           </div>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: 8
-          }}
-        >
+        <div style={{ display: 'flex', gap: 8 }}>
           {role === 'administrador' && (
-            <a
-              className="btn ghost"
-              href="/configuracao"
-            >
+            <a className="btn ghost" href="/configuracao">
               Configuração
             </a>
           )}
 
           <button
+            type="button"
             className="btn ghost"
             onClick={logout}
           >
@@ -346,33 +339,23 @@ export function DashboardClient({
         </div>
       </div>
 
-      {error && (
-        <div className="error">
-          {error}
-        </div>
-      )}
+      {error && <div className="error">{error}</div>}
 
       <div className="metricGrid">
-        {metrics.map(m => (
+        {metrics.map(metric => (
           <div
-            key={m.label}
+            key={metric.label}
             className={`card metric ${
-              m.tone === 'warn'
+              metric.tone === 'warn'
                 ? 'metricWarn'
-                : m.tone === 'ok'
+                : metric.tone === 'ok'
                   ? 'metricOk'
                   : ''
             }`}
           >
-            <span className="muted">
-              {m.label}
-            </span>
-
-            <strong>{m.value}</strong>
-
-            <small className="muted">
-              {m.hint}
-            </small>
+            <span className="muted">{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small className="muted">{metric.hint}</small>
           </div>
         ))}
       </div>
@@ -380,15 +363,9 @@ export function DashboardClient({
       <section className="todayPanel">
         <div className="panelHead">
           <div>
-            <div className="eyebrow">
-              Hoje
-            </div>
+            <div className="eyebrow">Hoje</div>
 
-            <h2
-              style={{
-                margin: '6px 0 2px'
-              }}
-            >
+            <h2 style={{ margin: '6px 0 2px' }}>
               Agenda do dia
             </h2>
 
@@ -397,28 +374,19 @@ export function DashboardClient({
                 ? 'A atualizar…'
                 : lessons.length
                   ? `${lessons.length} aula${
-                      lessons.length === 1
-                        ? ''
-                        : 's'
-                    } marcada${
-                      lessons.length === 1
-                        ? ''
-                        : 's'
-                    }.`
+                      lessons.length === 1 ? '' : 's'
+                    } marcada${lessons.length === 1 ? '' : 's'}.`
                   : 'Não tens aulas marcadas para hoje.'}
             </div>
           </div>
 
           <button
+            type="button"
             className="btn primary"
             onClick={() =>
               document
-                .getElementById(
-                  'agenda-anchor'
-                )
-                ?.scrollIntoView({
-                  behavior: 'smooth'
-                })
+                .getElementById('agenda-anchor')
+                ?.scrollIntoView({ behavior: 'smooth' })
             }
           >
             Abrir agenda
@@ -431,50 +399,33 @@ export function DashboardClient({
           </div>
         ) : lessons.length === 0 ? (
           <div className="emptyCard">
-            Hoje está tranquilo. Nada pendente
-            por aqui.
+            Hoje está tranquilo. Nada pendente por aqui.
           </div>
         ) : (
           <div className="todayList">
-            {lessons.map(l => (
-              <div
-                className="todayRow"
-                key={l.id}
-              >
+            {lessons.map(lesson => (
+              <div className="todayRow" key={lesson.id}>
                 <div className="todayTime">
-                  {fmtTime(l.starts_at)}
+                  {fmtTime(lesson.starts_at)}
                 </div>
 
                 <div>
                   <strong>
-                    {role === 'professor' ||
-                    role === 'administrador'
-                      ? l.student
-                          ?.full_name ||
-                        'Aluno'
-                      : `Aula de ${
-                          l.instrument?.name ||
-                          'música'
-                        }`}
+                    {role === 'professor' || role === 'administrador'
+                      ? lesson.student?.full_name || 'Aluno'
+                      : `Aula de ${lesson.instrument?.name || 'música'}`}
                   </strong>
 
                   <div className="muted">
-                    {l.instrument?.name ||
-                      'Instrumento'}{' '}
-                    · 50 min
-                    {role ===
-                    'administrador'
-                      ? ` · ${
-                          l.teacher?.profile
-                            ?.full_name ||
-                          'Professor'
-                        }`
+                    {lesson.instrument?.name || 'Instrumento'} · 50 min
+                    {role === 'administrador'
+                      ? ` · ${lesson.teacher?.profile?.full_name || 'Professor'}`
                       : ''}
                   </div>
                 </div>
 
                 <div className="todayDate">
-                  {fmtDate(l.starts_at)}
+                  {fmtDate(lesson.starts_at)}
                 </div>
               </div>
             ))}
@@ -485,90 +436,66 @@ export function DashboardClient({
       {role === 'administrador' && (
         <section className="quickActions">
           <button
+            type="button"
             className="quickCard"
             onClick={() =>
               document
-                .getElementById(
-                  'pessoas-anchor'
-                )
-                ?.scrollIntoView({
-                  behavior: 'smooth'
-                })
+                .getElementById('pessoas-anchor')
+                ?.scrollIntoView({ behavior: 'smooth' })
             }
           >
             <span>+</span>
-
             <div>
               <strong>Novo aluno</strong>
-              <small>
-                Adicionar ficha e instrumentos
-              </small>
+              <small>Adicionar ficha e instrumentos</small>
             </div>
           </button>
 
           <button
+            type="button"
             className="quickCard"
             onClick={() =>
               document
-                .getElementById(
-                  'agenda-anchor'
-                )
-                ?.scrollIntoView({
-                  behavior: 'smooth'
-                })
+                .getElementById('agenda-anchor')
+                ?.scrollIntoView({ behavior: 'smooth' })
             }
           >
             <span>＋</span>
-
             <div>
               <strong>Novo horário</strong>
-              <small>
-                Marcar aula de 50 minutos
-              </small>
+              <small>Marcar aula de 50 minutos</small>
             </div>
           </button>
 
           <button
+            type="button"
             className="quickCard"
             onClick={() =>
               document
-                .getElementById(
-                  'finance-anchor'
-                )
-                ?.scrollIntoView({
-                  behavior: 'smooth'
-                })
+                .getElementById('finance-anchor')
+                ?.scrollIntoView({ behavior: 'smooth' })
             }
           >
             <span>€</span>
-
             <div>
               <strong>Financeiro</strong>
-              <small>
-                {overdue} mensalidades pendentes
-              </small>
+              <small>{overdue} mensalidades pendentes</small>
             </div>
           </button>
 
           <button
+            type="button"
             className="quickCard"
             onClick={() =>
               document
-                .getElementById(
-                  'leads-anchor'
-                )
-                ?.scrollIntoView({
-                  behavior: 'smooth'
-                })
+                .getElementById('leads-anchor')
+                ?.scrollIntoView({ behavior: 'smooth' })
             }
           >
             <span>↗</span>
-
             <div>
               <strong>Leads</strong>
-              <small>
-                {newLeads} contactos para seguir
-              </small>
+              <small>{newLeads} contactos para seguir</small>
             </div>
           </button>
         </section>
@@ -588,11 +515,17 @@ export function DashboardClient({
 
       <Reschedules role={role} />
 
-     {role === 'administrador' && (
-  <div id="finance-anchor">
-    <Finance role={role} />
-  </div>
-)}
+      {role === 'administrador' && (
+        <div id="finance-anchor">
+          <Finance role={role} />
+        </div>
+      )}
+
+      {role === 'professor' && (
+        <div id="finance-anchor">
+          <TeacherFinance />
+        </div>
+      )}
 
       <div id="leads-anchor">
         <Leads role={role} />
@@ -602,22 +535,22 @@ export function DashboardClient({
 
       <AdminUsers role={role} />
 
-      <section className="section">
-        <div className="notice">
-          <strong>
-            {activeStudents
-              ? `${activeStudents} alunos ativos neste momento.`
-              : 'Base de produção ativa.'}
-          </strong>
+      {role === 'administrador' && (
+        <section className="section">
+          <div className="notice">
+            <strong>
+              {activeStudents
+                ? `${activeStudents} alunos ativos neste momento.`
+                : 'Base de produção ativa.'}
+            </strong>
 
-          <br />
-
-          O dashboard junta agenda,
-          remarcações, pagamentos e leads sem
-          substituir as regras de acesso da base
-          de dados.
-        </div>
-      </section>
+            <p style={{ marginBottom: 0 }}>
+              O dashboard junta agenda, remarcações, pagamentos e leads
+              sem substituir as regras de acesso da base de dados.
+            </p>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

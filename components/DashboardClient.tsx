@@ -97,7 +97,9 @@ export function DashboardClient({
     try {
       const { start, end } = todayBounds();
 
-      const queries: Promise<any>[] = [
+      // Supabase query builders são thenable, mas não são
+      // necessariamente instâncias de Promise.
+      const queries: PromiseLike<any>[] = [
         supabase
           .from('lessons')
           .select(
@@ -149,6 +151,7 @@ export function DashboardClient({
       }
 
       const results = await Promise.all(queries);
+
       const lessonsResult = results[0];
       const reschedulesResult = results[1];
 
@@ -181,6 +184,8 @@ export function DashboardClient({
         if (paymentsResult.error) throw paymentsResult.error;
 
         setOverdue(paymentsResult.data?.length || 0);
+        setNewLeads(0);
+        setActiveStudents(0);
       } else {
         setOverdue(0);
         setNewLeads(0);
@@ -188,7 +193,8 @@ export function DashboardClient({
       }
     } catch (err: any) {
       setError(
-        err?.message || 'Não foi possível carregar o resumo do dashboard.'
+        err?.message ||
+          'Não foi possível carregar o resumo do dashboard.'
       );
     } finally {
       setLoading(false);
@@ -263,7 +269,9 @@ export function DashboardClient({
         },
         {
           label: 'Primeira aula',
-          value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
+          value: lessons[0]
+            ? fmtTime(lessons[0].starts_at)
+            : '—',
           hint: lessons[0]
             ? `Aluno ${lessons[0].student?.full_name || ''}`
             : 'Sem aulas hoje',
@@ -294,7 +302,9 @@ export function DashboardClient({
       },
       {
         label: 'Próxima aula',
-        value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
+        value: lessons[0]
+          ? fmtTime(lessons[0].starts_at)
+          : '—',
         hint: lessons[0]?.instrument?.name || 'Sem aulas hoje',
       },
       {
@@ -375,7 +385,9 @@ export function DashboardClient({
                 : lessons.length
                   ? `${lessons.length} aula${
                       lessons.length === 1 ? '' : 's'
-                    } marcada${lessons.length === 1 ? '' : 's'}.`
+                    } marcada${
+                      lessons.length === 1 ? '' : 's'
+                    }.`
                   : 'Não tens aulas marcadas para hoje.'}
             </div>
           </div>
@@ -554,3 +566,4 @@ export function DashboardClient({
     </main>
   );
 }
+

@@ -97,8 +97,6 @@ export function DashboardClient({
     try {
       const { start, end } = todayBounds();
 
-      // Supabase query builders são thenable, mas não são
-      // necessariamente instâncias de Promise.
       const queries: PromiseLike<any>[] = [
         supabase
           .from('lessons')
@@ -352,7 +350,7 @@ export function DashboardClient({
       {error && <div className="error">{error}</div>}
 
       <div className="metricGrid">
-        {metrics.map(metric => (
+        {metrics.map((metric) => (
           <div
             key={metric.label}
             className={`card metric ${
@@ -415,7 +413,7 @@ export function DashboardClient({
           </div>
         ) : (
           <div className="todayList">
-            {lessons.map(lesson => (
+            {lessons.map((lesson) => (
               <div className="todayRow" key={lesson.id}>
                 <div className="todayTime">
                   {fmtTime(lesson.starts_at)}
@@ -423,15 +421,21 @@ export function DashboardClient({
 
                 <div>
                   <strong>
-                    {role === 'professor' || role === 'administrador'
+                    {role === 'professor' ||
+                    role === 'administrador'
                       ? lesson.student?.full_name || 'Aluno'
-                      : `Aula de ${lesson.instrument?.name || 'música'}`}
+                      : `Aula de ${
+                          lesson.instrument?.name || 'música'
+                        }`}
                   </strong>
 
                   <div className="muted">
                     {lesson.instrument?.name || 'Instrumento'} · 50 min
                     {role === 'administrador'
-                      ? ` · ${lesson.teacher?.profile?.full_name || 'Professor'}`
+                      ? ` · ${
+                          lesson.teacher?.profile?.full_name ||
+                          'Professor'
+                        }`
                       : ''}
                   </div>
                 </div>
@@ -491,7 +495,9 @@ export function DashboardClient({
             <span>€</span>
             <div>
               <strong>Financeiro</strong>
-              <small>{overdue} mensalidades pendentes</small>
+              <small>
+                {overdue} mensalidades pendentes
+              </small>
             </div>
           </button>
 
@@ -507,7 +513,9 @@ export function DashboardClient({
             <span>↗</span>
             <div>
               <strong>Leads</strong>
-              <small>{newLeads} contactos para seguir</small>
+              <small>
+                {newLeads} contactos para seguir
+              </small>
             </div>
           </button>
         </section>
@@ -566,4 +574,3 @@ export function DashboardClient({
     </main>
   );
 }
-

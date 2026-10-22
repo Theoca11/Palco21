@@ -35,6 +35,16 @@ type Lesson = {
   } | null;
 };
 
+type Tab =
+  | 'dashboard'
+  | 'agenda'
+  | 'alunos'
+  | 'professores'
+  | 'financeiro'
+  | 'remarcacoes'
+  | 'contactos'
+  | 'utilizadores';
+
 const fmtTime = (value: string) =>
   new Intl.DateTimeFormat('pt-PT', {
     hour: '2-digit',
@@ -78,6 +88,7 @@ export function DashboardClient({
   const router = useRouter();
   const supabase = createClient();
 
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [pendingRebooks, setPendingRebooks] = useState(0);
   const [overdue, setOverdue] = useState(0);
@@ -155,13 +166,8 @@ export function DashboardClient({
       const lessonsResult = results[0];
       const reschedulesResult = results[1];
 
-      if (lessonsResult.error) {
-        throw lessonsResult.error;
-      }
-
-      if (reschedulesResult.error) {
-        throw reschedulesResult.error;
-      }
+      if (lessonsResult.error) throw lessonsResult.error;
+      if (reschedulesResult.error) throw reschedulesResult.error;
 
       setLessons((lessonsResult.data || []) as Lesson[]);
       setPendingRebooks(reschedulesResult.data?.length || 0);
@@ -269,9 +275,7 @@ export function DashboardClient({
         },
         {
           label: 'Primeira aula',
-          value: lessons[0]
-            ? fmtTime(lessons[0].starts_at)
-            : '—',
+          value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
           hint: lessons[0]
             ? `Aluno ${lessons[0].student?.full_name || ''}`
             : 'Sem aulas hoje',
@@ -302,9 +306,7 @@ export function DashboardClient({
       },
       {
         label: 'Próxima aula',
-        value: lessons[0]
-          ? fmtTime(lessons[0].starts_at)
-          : '—',
+        value: lessons[0] ? fmtTime(lessons[0].starts_at) : '—',
         hint: lessons[0]?.instrument?.name || 'Sem aulas hoje',
       },
       {
@@ -315,6 +317,36 @@ export function DashboardClient({
     ];
   }, [role, lessons, pendingRebooks, overdue, newLeads]);
 
+  const tabs: { id: Tab; label: string }[] =
+    role === 'administrador'
+      ? [
+          { id: 'dashboard', label: 'Resumo' },
+          { id: 'agenda', label: 'Agenda' },
+          { id: 'alunos', label: 'Alunos' },
+          { id: 'professores', label: 'Professores' },
+          { id: 'financeiro', label: 'Financeiro' },
+          { id: 'remarcacoes', label: 'Remarcações' },
+          { id: 'contactos', label: 'Contactos' },
+          { id: 'utilizadores', label: 'Utilizadores' },
+        ]
+      : role === 'professor'
+        ? [
+            { id: 'dashboard', label: 'Resumo' },
+            { id: 'agenda', label: 'Agenda' },
+            { id: 'remarcacoes', label: 'Remarcações' },
+            { id: 'financeiro', label: 'Financeiro' },
+          ]
+        : [
+            { id: 'dashboard', label: 'Resumo' },
+            { id: 'agenda', label: 'Agenda' },
+            { id: 'remarcacoes', label: 'Remarcações' },
+          ];
+
+  function goToTab(tab: Tab) {
+    setActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   return (
     <main className="dash">
       <div className="dashHead">
@@ -324,7 +356,21 @@ export function DashboardClient({
           </div>
 
           <h1 style={{ margin: '6px 0' }}>
-            {heading}
+            {activeTab === 'alunos'
+              ? 'Gestão de alunos'
+              : activeTab === 'professores'
+                ? 'Gestão de professores'
+                : activeTab === 'agenda'
+                  ? 'Agenda'
+                  : activeTab === 'financeiro'
+                    ? 'Financeiro'
+                    : activeTab === 'remarcacoes'
+                      ? 'Remarcações'
+                      : activeTab === 'contactos'
+                        ? 'Contactos'
+                        : activeTab === 'utilizadores'
+                          ? 'Utilizadores'
+                          : heading}
           </h1>
 
           <div className="muted">
@@ -349,235 +395,234 @@ export function DashboardClient({
         </div>
       </div>
 
+      <nav
+        aria-label="Navegação principal"
+        style={{
+          display: 'flex',
+          gap: 8,
+          margin: '20px 0',
+          paddingBottom: 12,
+          borderBottom: '1px solid #333',
+          overflowX: 'auto',
+          flexWrap: 'wrap',
+        }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`btn ${
+              activeTab === tab.id ? 'primary' : 'ghost'
+            }`}
+            onClick={() => goToTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
       {error && <div className="error">{error}</div>}
 
-      <div className="metricGrid">
-        {metrics.map((metric) => (
-          <div
-            key={metric.label}
-            className={`card metric ${
-              metric.tone === 'warn'
-                ? 'metricWarn'
-                : metric.tone === 'ok'
-                  ? 'metricOk'
-                  : ''
-            }`}
-          >
-            <span className="muted">{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <small className="muted">{metric.hint}</small>
-          </div>
-        ))}
-      </div>
-
-      <section className="todayPanel">
-        <div className="panelHead">
-          <div>
-            <div className="eyebrow">Hoje</div>
-
-            <h2 style={{ margin: '6px 0 2px' }}>
-              Agenda do dia
-            </h2>
-
-            <div className="muted">
-              {loading
-                ? 'A atualizar…'
-                : lessons.length
-                  ? `${lessons.length} aula${
-                      lessons.length === 1 ? '' : 's'
-                    } marcada${
-                      lessons.length === 1 ? '' : 's'
-                    }.`
-                  : 'Não tens aulas marcadas para hoje.'}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() =>
-              document
-                .getElementById('agenda-anchor')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            Abrir agenda
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="emptyCard">
-            A carregar o resumo…
-          </div>
-        ) : lessons.length === 0 ? (
-          <div className="emptyCard">
-            Hoje está tranquilo. Nada pendente por aqui.
-          </div>
-        ) : (
-          <div className="todayList">
-            {lessons.map((lesson) => (
-              <div className="todayRow" key={lesson.id}>
-                <div className="todayTime">
-                  {fmtTime(lesson.starts_at)}
-                </div>
-
-                <div>
-                  <strong>
-                    {role === 'professor' ||
-                    role === 'administrador'
-                      ? lesson.student?.full_name || 'Aluno'
-                      : `Aula de ${
-                          lesson.instrument?.name || 'música'
-                        }`}
-                  </strong>
-
-                  <div className="muted">
-                    {lesson.instrument?.name || 'Instrumento'} · 50 min
-                    {role === 'administrador'
-                      ? ` · ${
-                          lesson.teacher?.profile?.full_name ||
-                          'Professor'
-                        }`
-                      : ''}
-                  </div>
-                </div>
-
-                <div className="todayDate">
-                  {fmtDate(lesson.starts_at)}
-                </div>
+      {activeTab === 'dashboard' && (
+        <>
+          <div className="metricGrid">
+            {metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className={`card metric ${
+                  metric.tone === 'warn'
+                    ? 'metricWarn'
+                    : metric.tone === 'ok'
+                      ? 'metricOk'
+                      : ''
+                }`}
+              >
+                <span className="muted">{metric.label}</span>
+                <strong>{metric.value}</strong>
+                <small className="muted">{metric.hint}</small>
               </div>
             ))}
           </div>
-        )}
-      </section>
 
-      {role === 'administrador' && (
-        <section className="quickActions">
-          <button
-            type="button"
-            className="quickCard"
-            onClick={() =>
-              document
-                .getElementById('student-management-anchor')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            <span>+</span>
-            <div>
-              <strong>Gestão de alunos</strong>
-              <small>Fichas, instrumentos e professores</small>
-            </div>
-          </button>
+          <section className="todayPanel">
+            <div className="panelHead">
+              <div>
+                <div className="eyebrow">Hoje</div>
+                <h2 style={{ margin: '6px 0 2px' }}>
+                  Agenda do dia
+                </h2>
+                <div className="muted">
+                  {loading
+                    ? 'A atualizar…'
+                    : lessons.length
+                      ? `${lessons.length} aula${
+                          lessons.length === 1 ? '' : 's'
+                        } marcada${
+                          lessons.length === 1 ? '' : 's'
+                        }.`
+                      : 'Não tens aulas marcadas para hoje.'}
+                </div>
+              </div>
 
-          <button
-            type="button"
-            className="quickCard"
-            onClick={() =>
-              document
-                .getElementById('agenda-anchor')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            <span>＋</span>
-            <div>
-              <strong>Novo horário</strong>
-              <small>Marcar aula de 50 minutos</small>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => goToTab('agenda')}
+              >
+                Abrir agenda
+              </button>
             </div>
-          </button>
 
-          <button
-            type="button"
-            className="quickCard"
-            onClick={() =>
-              document
-                .getElementById('finance-anchor')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            <span>€</span>
-            <div>
-              <strong>Financeiro</strong>
-              <small>
-                {overdue} mensalidades pendentes
-              </small>
-            </div>
-          </button>
+            {loading ? (
+              <div className="emptyCard">A carregar o resumo…</div>
+            ) : lessons.length === 0 ? (
+              <div className="emptyCard">
+                Hoje está tranquilo. Nada pendente por aqui.
+              </div>
+            ) : (
+              <div className="todayList">
+                {lessons.map((lesson) => (
+                  <div className="todayRow" key={lesson.id}>
+                    <div className="todayTime">
+                      {fmtTime(lesson.starts_at)}
+                    </div>
 
-          <button
-            type="button"
-            className="quickCard"
-            onClick={() =>
-              document
-                .getElementById('leads-anchor')
-                ?.scrollIntoView({ behavior: 'smooth' })
-            }
-          >
-            <span>↗</span>
-            <div>
-              <strong>Leads</strong>
-              <small>
-                {newLeads} contactos para seguir
-              </small>
-            </div>
-          </button>
-        </section>
+                    <div>
+                      <strong>
+                        {role === 'professor' ||
+                        role === 'administrador'
+                          ? lesson.student?.full_name || 'Aluno'
+                          : `Aula de ${
+                              lesson.instrument?.name || 'música'
+                            }`}
+                      </strong>
+
+                      <div className="muted">
+                        {lesson.instrument?.name || 'Instrumento'} · 50 min
+                        {role === 'administrador'
+                          ? ` · ${
+                              lesson.teacher?.profile?.full_name ||
+                              'Professor'
+                            }`
+                          : ''}
+                      </div>
+                    </div>
+
+                    <div className="todayDate">
+                      {fmtDate(lesson.starts_at)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {role === 'administrador' && (
+            <section className="quickActions">
+              <button
+                type="button"
+                className="quickCard"
+                onClick={() => goToTab('alunos')}
+              >
+                <span>+</span>
+                <div>
+                  <strong>Gestão de alunos</strong>
+                  <small>Fichas, instrumentos e professores</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quickCard"
+                onClick={() => goToTab('agenda')}
+              >
+                <span>＋</span>
+                <div>
+                  <strong>Novo horário</strong>
+                  <small>Marcar aula de 50 minutos</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quickCard"
+                onClick={() => goToTab('financeiro')}
+              >
+                <span>€</span>
+                <div>
+                  <strong>Financeiro</strong>
+                  <small>
+                    {overdue} mensalidades pendentes
+                  </small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quickCard"
+                onClick={() => goToTab('contactos')}
+              >
+                <span>↗</span>
+                <div>
+                  <strong>Contactos</strong>
+                  <small>{newLeads} contactos para seguir</small>
+                </div>
+              </button>
+            </section>
+          )}
+
+          {role === 'administrador' && (
+            <>
+              <Relatorios role={role} />
+              <section className="section">
+                <div className="notice">
+                  <strong>
+                    {activeStudents
+                      ? `${activeStudents} alunos ativos neste momento.`
+                      : 'Base de produção ativa.'}
+                  </strong>
+                  <p style={{ marginBottom: 0 }}>
+                    O dashboard junta agenda, remarcações, pagamentos e
+                    contactos importantes.
+                  </p>
+                </div>
+              </section>
+            </>
+          )}
+        </>
       )}
 
-      <div id="agenda-anchor">
-        <Agenda role={role} />
-      </div>
+      {activeTab === 'agenda' && <Agenda role={role} />}
 
-      {role === 'administrador' && (
-        <Relatorios role={role} />
+      {activeTab === 'alunos' && role === 'administrador' && (
+        <StudentManagement role={role} />
       )}
 
-      {role === 'administrador' && (
-        <div id="student-management-anchor">
-          <StudentManagement role={role} />
-        </div>
-      )}
-
-      <div id="pessoas-anchor">
+      {activeTab === 'professores' && role === 'administrador' && (
         <People role={role} />
-      </div>
-
-      <Reschedules role={role} />
-
-      {role === 'administrador' && (
-        <div id="finance-anchor">
-          <Finance role={role} />
-        </div>
       )}
 
-      {role === 'professor' && (
-        <div id="finance-anchor">
-          <TeacherFinance />
-        </div>
+      {activeTab === 'financeiro' && role === 'administrador' && (
+        <Finance role={role} />
       )}
 
-      <div id="leads-anchor">
-        <Leads role={role} />
-      </div>
+      {activeTab === 'financeiro' && role === 'professor' && (
+        <TeacherFinance />
+      )}
 
-      <Notifications role={role} />
+      {activeTab === 'remarcacoes' && (
+        <Reschedules role={role} />
+      )}
 
-      <AdminUsers role={role} />
+      {activeTab === 'contactos' && role === 'administrador' && (
+        <>
+          <Leads role={role} />
+          <Notifications role={role} />
+        </>
+      )}
 
-      {role === 'administrador' && (
-        <section className="section">
-          <div className="notice">
-            <strong>
-              {activeStudents
-                ? `${activeStudents} alunos ativos neste momento.`
-                : 'Base de produção ativa.'}
-            </strong>
-
-            <p style={{ marginBottom: 0 }}>
-              O dashboard junta agenda, remarcações, pagamentos e leads
-              sem substituir as regras de acesso da base de dados.
-            </p>
-          </div>
-        </section>
+      {activeTab === 'utilizadores' && role === 'administrador' && (
+        <AdminUsers role={role} />
       )}
     </main>
   );

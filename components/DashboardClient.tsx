@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -532,7 +533,7 @@ export function DashboardClient({
 
       {role === 'administrador' && (
         <div id="student-management-anchor">
-          <StudentManagement />
+          <StudentManagement role={role} />
         </div>
       )}
 

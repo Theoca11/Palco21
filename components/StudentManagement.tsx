@@ -57,9 +57,7 @@ export function StudentManagement({
   const [students, setStudents] = useState<Student[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [assignments, setAssignments] = useState<
-    Record<string, Assignment[]>
-  >({});
+  const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({});
 
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -68,11 +66,11 @@ export function StudentManagement({
   const [success, setSuccess] = useState('');
 
   const [editing, setEditing] = useState<Student | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [selectedInstruments, setSelectedInstruments] =
-    useState<string[]>([]);
-  const [teacherByInstrument, setTeacherByInstrument] =
-    useState<Record<string, string>>({});
+
+  const [selectedInstruments, setSelectedInstruments] = useState<string[]>([]);
+  const [teacherByInstrument, setTeacherByInstrument] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
@@ -82,9 +80,7 @@ export function StudentManagement({
       await Promise.all([
         supabase
           .from('students')
-          .select(
-            'id,full_name,email,phone,guardian_name,guardian_phone,guardian_email,important_notes,status,monthly_fee'
-          )
+          .select('id,full_name,email,phone,guardian_name,guardian_phone,guardian_email,important_notes,status,monthly_fee')
           .order('full_name'),
 
         supabase
@@ -94,9 +90,7 @@ export function StudentManagement({
 
         supabase
           .from('teachers')
-          .select(
-            'id,specialty,active,profile:profiles(full_name)'
-          )
+          .select('id,specialty,active,profile:profiles(full_name)')
           .eq('active', true),
 
         supabase
@@ -161,14 +155,14 @@ export function StudentManagement({
         student.email,
         student.phone,
         student.guardian_name,
-      ]
-        .some((value) =>
-          (value || '').toLocaleLowerCase('pt-PT').includes(q)
-        )
+      ].some((value) =>
+        (value || '').toLocaleLowerCase('pt-PT').includes(q)
+      )
     );
   }, [students, search]);
 
   function openNew() {
+    setModalOpen(true);
     setEditing(null);
     setForm(EMPTY_FORM);
     setSelectedInstruments([]);
@@ -178,6 +172,7 @@ export function StudentManagement({
   }
 
   function openEdit(student: Student) {
+    setModalOpen(true);
     setEditing(student);
 
     setForm({
@@ -198,6 +193,7 @@ export function StudentManagement({
     setSelectedInstruments(selected);
 
     const mapping: Record<string, string> = {};
+
     current.forEach((item) => {
       mapping[item.instrument_id] = item.teacher_id;
     });
@@ -207,10 +203,7 @@ export function StudentManagement({
     setSuccess('');
   }
 
-  function updateField(
-    field: keyof typeof EMPTY_FORM,
-    value: string
-  ) {
+  function updateField(field: keyof typeof EMPTY_FORM, value: string) {
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -301,7 +294,6 @@ export function StudentManagement({
         throw new Error('Não foi possível identificar o aluno.');
       }
 
-      // Atualiza os instrumentos do aluno.
       const { error: deleteInstrumentError } = await supabase
         .from('student_instruments')
         .delete()
@@ -322,7 +314,6 @@ export function StudentManagement({
         if (insertInstrumentError) throw insertInstrumentError;
       }
 
-      // Substitui as atribuições de professor do aluno.
       const { error: deleteAssignmentsError } = await supabase
         .from('student_teacher_instruments')
         .delete()
@@ -351,6 +342,7 @@ export function StudentManagement({
       );
 
       setEditing(null);
+      setModalOpen(false);
       setForm(EMPTY_FORM);
       setSelectedInstruments([]);
       setTeacherByInstrument({});
@@ -369,11 +361,7 @@ export function StudentManagement({
   async function archiveStudent(student: Student) {
     if (!admin) return;
 
-    if (
-      !window.confirm(
-        `Arquivar ${student.full_name || 'este aluno'}?`
-      )
-    ) {
+    if (!window.confirm(`Arquivar ${student.full_name || 'este aluno'}?`)) {
       return;
     }
 
@@ -430,10 +418,7 @@ export function StudentManagement({
             const assigned = assignments[student.id] || [];
 
             return (
-              <article
-                className="personCard"
-                key={student.id}
-              >
+              <article className="personCard" key={student.id}>
                 <div className="personTop">
                   <div>
                     <strong>{student.full_name || 'Sem nome'}</strong>
@@ -443,9 +428,7 @@ export function StudentManagement({
                     </div>
                   </div>
 
-                  <span className="pill">
-                    {student.status}
-                  </span>
+                  <span className="pill">{student.status}</span>
                 </div>
 
                 <div className="personMeta">
@@ -510,7 +493,7 @@ export function StudentManagement({
         </div>
       )}
 
-      {admin && (editing || form.full_name === '') && (
+      {admin && modalOpen && (
         <div className="modalBackdrop">
           <form className="modalCard" onSubmit={saveStudent}>
             <div className="dashHead">
@@ -527,13 +510,12 @@ export function StudentManagement({
                 type="button"
                 className="btn ghost"
                 onClick={() => {
+                  setModalOpen(false);
                   setEditing(null);
-                  setForm({
-                    ...EMPTY_FORM,
-                    full_name: '__CANCELLED__',
-                  });
+                  setForm(EMPTY_FORM);
                   setSelectedInstruments([]);
                   setTeacherByInstrument({});
+                  setError('');
                 }}
               >
                 Fechar
@@ -544,7 +526,7 @@ export function StudentManagement({
               <label>Nome completo *</label>
               <input
                 required
-                value={form.full_name === '__CANCELLED__' ? '' : form.full_name}
+                value={form.full_name}
                 onChange={(e) => updateField('full_name', e.target.value)}
               />
             </div>
@@ -681,7 +663,7 @@ export function StudentManagement({
             <button
               className="btn primary"
               type="submit"
-              disabled={saving || form.full_name === '__CANCELLED__'}
+              disabled={saving}
             >
               {saving ? 'A guardar…' : 'Guardar ficha'}
             </button>
@@ -691,3 +673,4 @@ export function StudentManagement({
     </section>
   );
 }
+
